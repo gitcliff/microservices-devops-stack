@@ -1,0 +1,222 @@
+name: Boutique CI Pipeline
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  security-and-quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # lint
+      - name: Install frontend dependencies
+        run: npm ci --prefix projects/boutique-microservices/frontend
+
+      - name: Install backend dependencies
+        run: npm ci --prefix projects/boutique-microservices/backend
+
+      # type check
+      - name: Frontend TypeScript check
+        run: npm --prefix projects/boutique-microservices/frontend exec tsc -- --noEmit
+
+      - name: Backend TypeScript check
+        run: npm --prefix projects/boutique-microservices/backend exec tsc -- --noEmit
+
+      # tests
+      - name: Frontend unit tests
+        run: |
+          CI=true npm --prefix projects/boutique-microservices/frontend test -- --watch=false --runInBand
+
+      # Semgrep
+      - name: Run Semgrep SAST
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/default
+            p/security-audit
+            p/javascript
+            p/typescript
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      # Snyk
+      - name: Run Snyk dependency scan (frontend)
+        uses: snyk/actions/node@v1.5.0
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --file=projects/boutique-microservices/frontend/package.json
+
+      - name: Run Snyk dependency scan (backend)
+        uses: snyk/actions/node@v1.5.0
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --file=projects/boutique-microservices/backend/package.json
+
+      # SonarQube
+      - name: Run SonarQube analysis
+        uses: SonarSource/sonarqube-scan-action@v2.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      # Trivy FS
+      - name: Repository vulnerability and secret scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          scanners: vuln,secret,config
+          exit-code: "1"
+
+  build-and-scan:
+    needs: security-and-quality
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service:
+          - auth
+          - gateway
+          - orders
+          - order-service
+          - product-service
+          - user-service
+          - frontend
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # build
+      - name: Build Docker Image
+        run: |
+          if [ "${{ matrix.service }}" == "frontend" ]; then
+            BUILD_PATH="projects/boutique-microservices/frontend"
+          else
+            BUILD_PATH="projects/boutique-microservices/backend/services/${{ matrix.service }}"
+          fi
+
+          echo "Building from $BUILD_PATH"
+          docker build -t boutique-${{ matrix.service }}:${{ github.sha }} "$BUILD_PATH"
+
+      # Trivy image scan
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: boutique-${{ matrix.service }}:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Save Docker image artifact
+        run: |
+          mkdir -p /tmp/docker-images
+          docker save boutique-${{ matrix.service }}:${{ github.sha }} -o /tmp/docker-images/${{ matrix.service }}.tar
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.service }}
+          path: /tmp/docker-images/${{ matrix.service }}.tar
+          retention-days: 1
+
+  publish:
+    needs: build-and-scan
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service:
+          - auth
+          - gateway
+          - orders
+          - order-service
+          - product-service
+          - user-service
+          - frontend
+
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image-${{ matrix.service }}
+          path: /tmp/docker-images
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | \
+          docker login --username AWS \
+          --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_REGION.amazonaws.com
+
+      # push to ECR
+      - name: Load image and push to ECR
+        run: |
+          IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ matrix.service }}:${{ github.sha }}
+          docker load --input /tmp/docker-images/${{ matrix.service }}.tar
+          docker tag boutique-${{ matrix.service }}:${{ github.sha }} "$IMAGE_URI"
+          echo "Pushing $IMAGE_URI"
+          docker push "$IMAGE_URI"
+
+#   update-manifests:
+#     needs: publish
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: write
+
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+#         with:
+#           token: ${{ secrets.GITHUB_TOKEN }}
+
+#       # update GitOps
+#       - name: Update image tags in k8s manifests
+#         run: |
+#           NEW_TAG=${{ github.sha }}
+#           ACCOUNT=${{ secrets.AWS_ACCOUNT_ID }}
+#           REGION=${{ secrets.AWS_REGION }}
+
+#           for SERVICE in auth gateway orders order-service product-service user-service; do
+#             MANIFEST="gitops/k8s/backend/${SERVICE}.yml"
+#             sed -i "s|${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/${SERVICE}:.*|${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/${SERVICE}:${NEW_TAG}|g" $MANIFEST
+#           done
+
+#           sed -i "s|${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/frontend:.*|${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/frontend:${NEW_TAG}|g" gitops/k8s/frontend/deployment.yml
+
+#       - name: Commit and push updated manifests
+#         run: |
+#           git config user.name "github-actions"
+#           git config user.email "github-actions@github.com"
+#           git add gitops/k8s/
+#           git diff --staged --quiet || git commit -m "ci: update image tags to ${{ github.sha }}"
+#           git push
