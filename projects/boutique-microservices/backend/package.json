@@ -11,8 +11,12 @@
     "dev:users": "cd services/user-service && npm run dev",
     "build": "cd services/gateway && npm run build && cd ../auth && npm run build && cd ../product-service && npm run build && cd ../orders && npm run build && cd ../user-service && npm run build",
     "typecheck": "tsc --project services/gateway/tsconfig.json --noEmit && tsc --project services/auth/tsconfig.json --noEmit && tsc --project services/product-service/tsconfig.json --noEmit && tsc --project services/orders/tsconfig.json --noEmit && tsc --project services/user-service/tsconfig.json --noEmit",
-    "test": "npm run test --workspace=gateway-service --if-present && npm run test --workspace=auth-service --if-present && npm run test --workspace=product-service --if-present && npm run test --workspace=orders-service --if-present && npm run test --workspace=user-service --if-present"
-
+    "test": "npm run test:gateway && npm run test:auth && npm run test:product && npm run test:orders && npm run test:user",
+    "test:gateway": "npm --prefix services/gateway run test --if-present",
+    "test:auth": "npm --prefix services/auth run test --if-present",
+    "test:product": "npm --prefix services/product-service run test --if-present",
+    "test:orders": "npm --prefix services/orders run test --if-present",
+    "test:user": "npm --prefix services/user-service run test --if-present"
   },
   "dependencies": {
     "express": "^4.18.2",
