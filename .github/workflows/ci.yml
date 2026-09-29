@@ -57,12 +57,10 @@ jobs:
       # Type checking
       # ----------------------------------------------------------
       - name: Frontend TypeScript check
-        run: |
-          npm --prefix projects/boutique-microservices/frontend exec tsc -- --noEmit
+        run: npm --prefix projects/boutique-microservices/frontend run typecheck
 
       - name: Backend TypeScript check
-        run: |
-          npm --prefix projects/boutique-microservices/backend exec tsc -- --noEmit
+        run: npm --prefix projects/boutique-microservices/backend run typecheck
 
       # ----------------------------------------------------------
       # Tests
