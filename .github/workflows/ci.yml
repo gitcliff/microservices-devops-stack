@@ -92,7 +92,7 @@ jobs:
       # Snyk dependency scanning
       # ----------------------------------------------------------
       - name: Run Snyk dependency scan - frontend
-        uses: snyk/actions/node@v1.5.0
+        uses: snyk/actions/node@v1.0.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -101,7 +101,7 @@ jobs:
             --file=projects/boutique-microservices/frontend/package.json
 
       - name: Run Snyk dependency scan - backend
-        uses: snyk/actions/node@v1.5.0
+        uses: snyk/actions/node@v1.0.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
