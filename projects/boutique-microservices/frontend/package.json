@@ -30,6 +30,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

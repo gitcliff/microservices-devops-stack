@@ -10,6 +10,7 @@
     "dev:orders": "cd services/orders && npm run dev",
     "dev:users": "cd services/user-service && npm run dev",
     "build": "cd services/gateway && npm run build && cd ../auth && npm run build && cd ../product-service && npm run build && cd ../orders && npm run build && cd ../user-service && npm run build",
+    "typecheck": "tsc --project services/gateway/tsconfig.json --noEmit && tsc --project services/auth/tsconfig.json --noEmit && tsc --project services/product-service/tsconfig.json --noEmit && tsc --project services/orders/tsconfig.json --noEmit && tsc --project services/user-service/tsconfig.json --noEmit",
     "test": "cd services/gateway && npm test && cd ../auth && npm test && cd ../product-service && npm test && cd ../orders && npm test && cd ../user-service && npm test"
   },
   "dependencies": {
@@ -17,6 +18,7 @@
     "cors": "^2.8.5",
     "helmet": "^7.1.0",
     "dotenv": "^16.3.1",
+    "prom-client": "^15.1.0",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.3",
