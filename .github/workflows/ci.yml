@@ -51,7 +51,7 @@ jobs:
 
       - name: Install backend dependencies
         run: |
-          npm ci --prefix projects/boutique-microservices/backend
+          npm ci --prefix projects/boutique-microservices/backend --legacy-peer-deps
 
       # ----------------------------------------------------------
       # Type checking
