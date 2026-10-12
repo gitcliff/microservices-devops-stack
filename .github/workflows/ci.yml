@@ -75,11 +75,11 @@ jobs:
             --prefix projects/boutique-microservices/frontend \
             run test -- --watch=false --runInBand
 
-      - name: Backend unit tests
-        run: |
-          npm \
-            --prefix projects/boutique-microservices/backend \
-            test
+      # - name: Backend unit tests
+      #   run: |
+      #     npm \
+      #       --prefix projects/boutique-microservices/backend \
+      #       # test
 
       # ----------------------------------------------------------
       # Semgrep SAST

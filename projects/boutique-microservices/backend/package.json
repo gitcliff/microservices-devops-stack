@@ -11,32 +11,40 @@
     "dev:users": "cd services/user-service && npm run dev",
     "build": "cd services/gateway && npm run build && cd ../auth && npm run build && cd ../product-service && npm run build && cd ../orders && npm run build && cd ../user-service && npm run build",
     "typecheck": "tsc --project services/gateway/tsconfig.json --noEmit && tsc --project services/auth/tsconfig.json --noEmit && tsc --project services/product-service/tsconfig.json --noEmit && tsc --project services/orders/tsconfig.json --noEmit && tsc --project services/user-service/tsconfig.json --noEmit",
-    "test": "cd services/gateway && npm test && cd ../auth && npm test && cd ../product-service && npm test && cd ../orders && npm test && cd ../user-service && npm test"
+    "lint": "eslint services --ext .ts --max-warnings 0",
+    "test": "jest",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "helmet": "^7.1.0",
-    "dotenv": "^16.3.1",
-    "http-proxy-middleware": "^2.0.6",
-    "prom-client": "^15.1.0",
+    "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
+    "http-proxy-middleware": "^3.0.7",
+    "joi": "^17.11.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.3",
+    "prom-client": "^15.1.0",
     "redis": "^4.6.10",
-    "axios": "^1.6.2",
-    "winston": "^3.11.0",
-    "joi": "^17.11.0"
+    "winston": "^3.11.0"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17",
     "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/pg": "^8.10.9",
-    "typescript": "^5.2.2",
-    "nodemon": "^3.0.2",
+    "@typescript-eslint/eslint-plugin": "^8.71.2",
+    "@typescript-eslint/parser": "^8.71.2",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.57.0",
+    "jest": "^25.0.0",
+    "nodemon": "^1.14.10",
+    "ts-jest": "^29.1.2",
     "ts-node": "^10.9.1",
-    "concurrently": "^8.2.2"
+    "typescript": "^5.2.2"
   }
 }

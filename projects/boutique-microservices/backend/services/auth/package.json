@@ -9,25 +9,31 @@
     "start": "node dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["auth", "microservice", "boutique"],
+  "keywords": [
+    "auth",
+    "microservice",
+    "boutique"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.18.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "helmet": "^7.1.0",
     "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
+    "http-proxy-middleware": "3.0.7",
     "pg": "^8.11.3",
-    "prom-client": "^15.1.0"
+    "prom-client": "^15.1.0",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
     "@types/pg": "^8.10.9",
-    "typescript": "^5.2.2",
-    "nodemon": "^3.0.2",
-    "ts-node": "^10.9.1"
+    "nodemon": "^1.14.10",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
   }
 }
