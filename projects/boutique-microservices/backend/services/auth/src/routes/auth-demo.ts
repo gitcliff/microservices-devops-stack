@@ -1,7 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import { query } from '../database/connection';
-import { User } from '../types';
 
 const router = express.Router();
 

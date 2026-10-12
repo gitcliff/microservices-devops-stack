@@ -1,12 +1,8 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import { query } from '../database/connection';
-import { User } from '../types';
 
 const router = express.Router();
-
-// Simple demo authentication without JWT
-let currentUser: any = null;
 
 router.post('/register', async (req, res) => {
   try {
@@ -24,7 +20,7 @@ router.post('/register', async (req, res) => {
     );
 
     const user = result.rows[0];
-    currentUser = {
+    _currentUser = {
       id: user.id,
       email: user.email,
       firstName: user.first_name,
@@ -73,7 +69,7 @@ router.post('/login', async (req, res) => {
         user = result.rows[0];
       }
 
-      currentUser = {
+      _currentUser = {
         id: user.id,
         email: user.email,
         firstName: user.first_name,
@@ -112,7 +108,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    currentUser = {
+    _currentUser = {
       id: user.id,
       email: user.email,
       firstName: user.first_name,
@@ -141,7 +137,7 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
-  currentUser = null;
+  _currentUser = null;
   res.json({ message: 'Logged out successfully' });
 });
 
@@ -169,7 +165,7 @@ router.get('/me', async (req, res) => {
       lastName: user.last_name,
       role: user.role
     });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ error: 'Failed to get user' });
   }
 });

@@ -1,7 +1,7 @@
 import express from 'express';
 import axios from 'axios';
 import { query } from '../database/connection';
-import { Order, CreateOrderRequest, Address, ServiceResponse } from '../types';
+import { CreateOrderRequest, Order, ServiceResponse } from '../types';
 
 const router = express.Router();
 const PRODUCTS_SERVICE_URL = process.env.PRODUCTS_SERVICE_URL || 'http://localhost:3003';

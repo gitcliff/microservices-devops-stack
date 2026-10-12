@@ -1,6 +1,6 @@
 import express from 'express';
 import { query } from '../database/connection';
-import { Product, ServiceResponse, PaginationParams } from '../types';
+import { ServiceResponse } from '../types';
 
 const router = express.Router();
 
@@ -136,7 +136,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.get('/categories', async (req, res) => {
+router.get('/categories', async (_req, res) => {
   try {
     const result = await query(`
       SELECT c.*, COUNT(p.id) as product_count 

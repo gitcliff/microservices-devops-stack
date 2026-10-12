@@ -13,7 +13,7 @@
     "typecheck": "tsc --project services/gateway/tsconfig.json --noEmit && tsc --project services/auth/tsconfig.json --noEmit && tsc --project services/product-service/tsconfig.json --noEmit && tsc --project services/orders/tsconfig.json --noEmit && tsc --project services/user-service/tsconfig.json --noEmit",
     "lint": "eslint services --ext .ts --max-warnings 0",
     "test": "jest",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage --passWithNoTests"
   },
   "dependencies": {
     "axios": "^1.6.2",

@@ -10,8 +10,6 @@ import {
   CardContent,
   Avatar,
   Chip,
-  Divider,
-  IconButton,
   List,
   ListItem,
   ListItemText,
