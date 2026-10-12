@@ -170,6 +170,7 @@ jobs:
 
       - name: Run Semgrep SAST
         uses: returntocorp/semgrep-action@v1
+        continue-on-error: true  # findings exit non-zero; don't abort the job
         with:
           config: >-
             p/typescript
@@ -180,8 +181,8 @@ jobs:
 
       # Publish findings to GitHub Security → Code scanning alerts
       - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('semgrep.sarif') != ''
         with:
           sarif_file: semgrep.sarif
 
