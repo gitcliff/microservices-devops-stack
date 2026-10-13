@@ -3,6 +3,15 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
 
+  // Allow default imports for CJS modules (express, supertest, etc.)
+  transform: {
+    '^.+\\.ts$': ['ts-jest', {
+      tsconfig: {
+        esModuleInterop: true,
+      },
+    }],
+  },
+
   // Discover tests inside any service sub-directory
   roots: ['<rootDir>/services'],
   testMatch: [

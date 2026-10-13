@@ -4,6 +4,8 @@ import { query } from '../database/connection';
 
 const router = express.Router();
 
+let _currentUser: any = null;
+
 router.post('/register', async (req, res) => {
   try {
     const { email, password, firstName, lastName } = req.body;
