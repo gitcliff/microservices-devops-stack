@@ -139,15 +139,10 @@ jobs:
           name: coverage-backend
           path: projects/boutique-microservices/backend/coverage
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
       # Run analysis and upload results to SonarQube server
+      # v4+ bundles Java 21; v2.x bundled Java 17 which SonarScanner 5 rejects
       - name: SonarQube scan
-        uses: SonarSource/sonarqube-scan-action@v2.3.0
+        uses: SonarSource/sonarqube-scan-action@v4
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
