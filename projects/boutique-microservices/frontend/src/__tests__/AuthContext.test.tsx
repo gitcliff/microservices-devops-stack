@@ -1,10 +1,9 @@
 import React from 'react';
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
 
-// Mock the auth service
 jest.mock('../services/authService', () => ({
   authService: {
     login: jest.fn(),
@@ -15,7 +14,6 @@ jest.mock('../services/authService', () => ({
 
 const mockedAuthService = authService as jest.Mocked<typeof authService>;
 
-// Test component that exercises the auth context
 function AuthTestHarness() {
   const { user, isAuthenticated, loading, error, login, logout, clearError } = useAuth();
 
@@ -33,9 +31,7 @@ function AuthTestHarness() {
 }
 
 function renderWithAuth() {
-  // Clear localStorage before each render
   localStorage.clear();
-
   return render(
     <AuthProvider>
       <AuthTestHarness />
@@ -47,7 +43,6 @@ describe('AuthContext', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
-    // Default: no stored token, so initAuth dispatches LOGIN_SUCCESS with null
     mockedAuthService.getCurrentUser.mockRejectedValue(new Error('No token'));
   });
 
@@ -70,18 +65,17 @@ describe('AuthContext', () => {
 
     renderWithAuth();
 
-    // Wait for initial auth check to complete
+    // Wait for initial auth check to settle
     await waitFor(() => {
       expect(screen.getByTestId('loading').textContent).not.toBe('true');
     });
 
-    // Trigger login
-    await act(async () => {
-      await userEvent.click(screen.getByText('Login'));
-    });
+    userEvent.click(screen.getByText('Login'));
 
     await waitFor(() => {
       expect(screen.getByTestId('authenticated').textContent).toBe('true');
+    });
+    await waitFor(() => {
       expect(screen.getByTestId('user').textContent).toBe('test@example.com');
     });
 
@@ -96,25 +90,22 @@ describe('AuthContext', () => {
 
     renderWithAuth();
 
-    // Wait for initial auth check
+    // Wait for initial auth check to settle
     await waitFor(() => {
       expect(screen.getByTestId('loading').textContent).not.toBe('true');
     });
 
-    // Attempt login
-    await act(async () => {
-      await userEvent.click(screen.getByText('Login'));
-    });
+    userEvent.click(screen.getByText('Login'));
 
     await waitFor(() => {
       expect(screen.getByTestId('authenticated').textContent).toBe('false');
+    });
+    await waitFor(() => {
       expect(screen.getByTestId('error').textContent).toBe('Invalid credentials');
     });
 
     // Clear the error
-    await act(async () => {
-      await userEvent.click(screen.getByText('Clear Error'));
-    });
+    userEvent.click(screen.getByText('Clear Error'));
 
     expect(screen.getByTestId('error').textContent).toBe('none');
   });

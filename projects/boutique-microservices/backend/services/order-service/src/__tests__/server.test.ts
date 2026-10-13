@@ -36,7 +36,7 @@ function createApp() {
       );
 
       res.json({ order: rows[0], product });
-    } catch (error) {
+    } catch (_error) {
       res.status(500).json({ error: 'Internal server error' });
     }
   });

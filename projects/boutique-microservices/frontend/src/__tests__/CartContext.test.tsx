@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CartProvider, useCart } from '../contexts/CartContext';
 import { Product } from '../types';
@@ -28,7 +28,6 @@ const secondProduct: Product = {
   updatedAt: '2026-01-01',
 };
 
-// Test component that exercises the cart context
 function CartTestHarness() {
   const { items, total, itemCount, addItem, removeItem, updateQuantity, clearCart } = useCart();
 
@@ -56,82 +55,62 @@ function renderWithCart() {
 }
 
 describe('CartContext', () => {
-  it('should add items, track count and total, and handle duplicates', async () => {
+  it('should add items, track count and total, and handle duplicates', () => {
     renderWithCart();
 
     expect(screen.getByTestId('item-count').textContent).toBe('0');
     expect(screen.getByTestId('total').textContent).toBe('0');
 
     // Add first product
-    await act(async () => {
-      await userEvent.click(screen.getByText('Add Product 1'));
-    });
+    userEvent.click(screen.getByText('Add Product 1'));
 
     expect(screen.getByTestId('item-count').textContent).toBe('1');
     expect(screen.getByTestId('total').textContent).toBe('1200');
 
-    // Add same product again — should increment quantity, not add new line
-    await act(async () => {
-      await userEvent.click(screen.getByText('Add Product 1'));
-    });
+    // Add same product again — should increment quantity, not add a new line
+    userEvent.click(screen.getByText('Add Product 1'));
 
     expect(screen.getByTestId('item-count').textContent).toBe('2');
     expect(screen.getByTestId('items-length').textContent).toBe('1'); // still 1 unique item
     expect(screen.getByTestId('total').textContent).toBe('2400');
 
     // Add second product
-    await act(async () => {
-      await userEvent.click(screen.getByText('Add Product 2'));
-    });
+    userEvent.click(screen.getByText('Add Product 2'));
 
     expect(screen.getByTestId('item-count').textContent).toBe('3');
     expect(screen.getByTestId('items-length').textContent).toBe('2');
     expect(screen.getByTestId('total').textContent).toBe('3200');
   });
 
-  it('should remove items, update quantities, and clear the cart', async () => {
+  it('should remove items, update quantities, and clear the cart', () => {
     renderWithCart();
 
     // Add two products
-    await act(async () => {
-      await userEvent.click(screen.getByText('Add Product 1'));
-    });
-    await act(async () => {
-      await userEvent.click(screen.getByText('Add Product 2'));
-    });
+    userEvent.click(screen.getByText('Add Product 1'));
+    userEvent.click(screen.getByText('Add Product 2'));
 
     expect(screen.getByTestId('items-length').textContent).toBe('2');
 
     // Remove product 1
-    await act(async () => {
-      await userEvent.click(screen.getByText('Remove Product 1'));
-    });
+    userEvent.click(screen.getByText('Remove Product 1'));
 
     expect(screen.getByTestId('items-length').textContent).toBe('1');
     expect(screen.getByTestId('total').textContent).toBe('800');
 
     // Add product 1 back and update quantity to 3
-    await act(async () => {
-      await userEvent.click(screen.getByText('Add Product 1'));
-    });
-    await act(async () => {
-      await userEvent.click(screen.getByText('Set Qty 3'));
-    });
+    userEvent.click(screen.getByText('Add Product 1'));
+    userEvent.click(screen.getByText('Set Qty 3'));
 
     expect(screen.getByTestId('item-count').textContent).toBe('4'); // 3 + 1
     expect(screen.getByTestId('total').textContent).toBe('4400'); // 1200*3 + 800
 
     // Set quantity to 0 — should remove the item
-    await act(async () => {
-      await userEvent.click(screen.getByText('Set Qty 0'));
-    });
+    userEvent.click(screen.getByText('Set Qty 0'));
 
     expect(screen.getByTestId('items-length').textContent).toBe('1');
 
     // Clear the entire cart
-    await act(async () => {
-      await userEvent.click(screen.getByText('Clear'));
-    });
+    userEvent.click(screen.getByText('Clear'));
 
     expect(screen.getByTestId('item-count').textContent).toBe('0');
     expect(screen.getByTestId('total').textContent).toBe('0');
