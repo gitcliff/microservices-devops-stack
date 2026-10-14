@@ -117,6 +117,8 @@ jobs:
     name: SonarQube Quality Gate
     needs: unit-tests
     runs-on: ubuntu-latest
+    env:
+      RUN_SONAR_CI: ${{ secrets.RUN_SONAR_CI }}
 
     permissions:
       contents: read
@@ -137,20 +139,23 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: coverage-backend
-          path: projects/boutique-microservices/backend/coverage
+          path:
+            projects/boutique-microservices/backend/coverage
 
-
-      # Run analysis and upload results to SonarQube server
       - name: SonarQube scan
+        # Skip running the scanner for pull_request events because SonarCloud's
+        # Automatic Analysis (GitHub App) already runs the analysis and will
+        # reject duplicate CI analyses. Set RUN_SONAR_CI=true only after
+        # disabling Automatic Analysis in SonarQube Cloud.
+        if: ${{ github.event_name != 'pull_request' || env.RUN_SONAR_CI == 'true' }}
         uses: SonarSource/sonarqube-scan-action@v7
-
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      # Poll until the quality gate result is available (timeout 5 min)
+      # Poll until the quality gate result is available (timeout 15 min)
       - name: SonarQube quality gate check
         uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
-        timeout-minutes: 5
+        timeout-minutes: 15
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
@@ -171,7 +176,7 @@ jobs:
 
       - name: Run Semgrep SAST
         uses: semgrep/semgrep-action@v1
-        continue-on-error: true  # findings exit non-zero; don't abort the job
+        continue-on-error: true # findings exit non-zero; don't abort the job
         with:
           config: >-
             p/typescript
