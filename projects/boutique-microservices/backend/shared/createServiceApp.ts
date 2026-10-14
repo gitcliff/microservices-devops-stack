@@ -1,29 +1,46 @@
-import express, { Router, RequestHandler } from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import * as dotenv from 'dotenv';
+import express, { Router, RequestHandler } from "express";
+import cors from "cors";
+import helmet from "helmet";
+import * as dotenv from "dotenv";
 
 interface ServiceConfig {
   serviceName: string;
   defaultPort: number;
   routes: Router;
   connectDB: () => Promise<void>;
-  setupMetrics: (app: express.Express, opts: { serviceName: string; serviceVersion: string }) => void;
+  setupMetrics: (
+    app: express.Express,
+    opts: { serviceName: string; serviceVersion: string },
+  ) => void;
   metricsMiddleware: RequestHandler;
   extraMiddleware?: Array<{ path: string; handler: RequestHandler }>;
 }
 
 export function createServiceApp(config: ServiceConfig): void {
-  dotenv.config({ path: './.env' });
+  dotenv.config({ path: "./.env" });
 
   const app = express();
   const PORT = process.env.PORT || config.defaultPort;
+  const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
   app.use(helmet());
-  app.use(cors());
+  app.use(
+    cors({
+      origin: (origin, callback) =>
+        callback(null, Boolean(origin && allowedOrigins.includes(origin))),
+      methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
+      allowedHeaders: ["Authorization", "Content-Type"],
+    }),
+  );
   app.use(express.json());
 
-  config.setupMetrics(app, { serviceName: config.serviceName, serviceVersion: '1.0.0' });
+  config.setupMetrics(app, {
+    serviceName: config.serviceName,
+    serviceVersion: "1.0.0",
+  });
   app.use(config.metricsMiddleware);
 
   if (config.extraMiddleware) {
@@ -32,24 +49,29 @@ export function createServiceApp(config: ServiceConfig): void {
     }
   }
 
-  app.use('', config.routes);
+  app.use("", config.routes);
 
-  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error(err.stack);
-    res.status(500).json({ error: 'Internal server error' });
-  });
+  app.use(
+    (
+      err: any,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      console.error(err.stack);
+      res.status(500).json({ error: "Internal server error" });
+    },
+  );
 
   const startServer = async () => {
-    try {
-      await config.connectDB();
-      app.listen(PORT, () => {
-        console.log(`${config.serviceName} running on port ${PORT}`);
-      });
-    } catch (error) {
-      console.error(`Failed to start ${config.serviceName}:`, error);
-      process.exit(1);
-    }
+    await config.connectDB();
+    app.listen(PORT, () => {
+      console.log(`${config.serviceName} running on port ${PORT}`);
+    });
   };
 
-  startServer();
+  void startServer().catch((error) => {
+    console.error(`Failed to start ${config.serviceName}:`, error);
+    process.exit(1);
+  });
 }
