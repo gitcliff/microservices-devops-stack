@@ -12,10 +12,8 @@ import {
   CardContent,
   Chip,
   Paper,
-  Divider,
   Breadcrumbs,
   Link,
-  Skeleton,
   Snackbar,
   Alert,
   Tabs,
@@ -30,7 +28,6 @@ import {
   Refresh as RefreshIcon,
   Star as StarIcon,
   FavoriteBorder as WishlistIcon,
-  ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
 import { productService } from '../../services/productService';
 import { Product } from '../../types';

@@ -6,7 +6,6 @@ import {
   Typography,
   Slider,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
   Checkbox,
@@ -60,7 +59,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     inStock: false,
   });
 
-  const handlePriceRangeChange = (event: Event, newValue: number | number[]) => {
+  const handlePriceRangeChange = (_event: Event, newValue: number | number[]) => {
     const newFilters = { ...filters, priceRange: newValue as [number, number] };
     setFilters(newFilters);
     onFilterChange(newFilters);

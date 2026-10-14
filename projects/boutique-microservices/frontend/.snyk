@@ -1,0 +1,28 @@
+# Snyk (https://snyk.io) policy file
+version: v1.25.0
+
+ignore:
+  SNYK-JS-REACTDEVUTILS-17890708:
+    - '*':
+        reason: >
+          react-dev-utils@12.0.1 is a hardcoded internal dependency of react-scripts@5.0.1.
+          No upgrade path exists without ejecting from CRA or migrating to Vite/Next.js.
+          This package is build-tooling only and is never included in the production bundle.
+        expires: '2027-01-01T00:00:00.000Z'
+
+  SNYK-JS-CSSOM-19964070:
+    - '*':
+        reason: >
+          cssom@0.4.4 is a transitive dependency of jsdom@16, which is pulled in by
+          jest-environment-jsdom (test tooling only). It is not present in the production
+          runtime and cannot be upgraded without a major version bump of jest/jsdom that
+          react-scripts@5 does not support.
+        expires: '2027-01-01T00:00:00.000Z'
+
+  SNYK-JS-URIJS-19963963:
+    - '*':
+        reason: >
+          uri-js@4.4.1 is a transitive dependency of ajv@6 via schema-utils@2, pulled in
+          by babel-loader@8 inside react-scripts@5.0.1. Build tooling only — not included
+          in the production bundle. No upgrade path without breaking react-scripts.
+        expires: '2027-01-01T00:00:00.000Z'

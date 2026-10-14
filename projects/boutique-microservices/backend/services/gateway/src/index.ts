@@ -9,9 +9,17 @@ dotenv.config();
 
 const app = express();
 const PORT: number = Number(process.env.GATEWAY_PORT) || 3001;
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => callback(null, Boolean(origin && allowedOrigins.includes(origin))),
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Authorization', 'Content-Type'],
+}));
 
 setupMetrics(app, { serviceName: 'gateway', serviceVersion: '1.0.0' });
 
@@ -52,7 +60,7 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Service not found' });
 });
 
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error' });
 });
