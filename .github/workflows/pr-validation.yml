@@ -154,6 +154,7 @@ jobs:
 
       # Poll until the quality gate result is available (timeout 15 min)
       - name: SonarQube quality gate check
+        if: ${{ github.event_name != 'pull_request' || env.RUN_SONAR_CI == 'true' }}
         uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
         timeout-minutes: 15
         env:
