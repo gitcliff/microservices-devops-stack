@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
@@ -13,6 +12,16 @@ jest.mock('../services/authService', () => ({
 }));
 
 const mockedAuthService = authService as jest.Mocked<typeof authService>;
+
+const mockUser = {
+  id: '1',
+  email: 'test@example.com',
+  firstName: 'Test',
+  lastName: 'User',
+  role: 'customer' as const,
+  createdAt: '2026-01-01',
+  updatedAt: '2026-01-01',
+};
 
 function AuthTestHarness() {
   const { user, isAuthenticated, loading, error, login, logout, clearError } = useAuth();
@@ -30,13 +39,17 @@ function AuthTestHarness() {
   );
 }
 
-function renderWithAuth() {
+async function renderAndWaitForAuth() {
   localStorage.clear();
-  return render(
+  render(
     <AuthProvider>
       <AuthTestHarness />
     </AuthProvider>
   );
+
+  await waitFor(() => {
+    expect(screen.getByTestId('loading').textContent).not.toBe('true');
+  });
 }
 
 describe('AuthContext', () => {
@@ -47,28 +60,13 @@ describe('AuthContext', () => {
   });
 
   it('should login successfully and store tokens', async () => {
-    const mockUser = {
-      id: '1',
-      email: 'test@example.com',
-      firstName: 'Test',
-      lastName: 'User',
-      role: 'customer' as const,
-      createdAt: '2026-01-01',
-      updatedAt: '2026-01-01',
-    };
-
     mockedAuthService.login.mockResolvedValueOnce({
       user: mockUser,
       token: 'access-token-123',
       refreshToken: 'refresh-token-456',
     });
 
-    renderWithAuth();
-
-    // Wait for initial auth check to settle
-    await waitFor(() => {
-      expect(screen.getByTestId('loading').textContent).not.toBe('true');
-    });
+    await renderAndWaitForAuth();
 
     userEvent.click(screen.getByText('Login'));
 
@@ -88,12 +86,7 @@ describe('AuthContext', () => {
       response: { data: { message: 'Invalid credentials' } },
     });
 
-    renderWithAuth();
-
-    // Wait for initial auth check to settle
-    await waitFor(() => {
-      expect(screen.getByTestId('loading').textContent).not.toBe('true');
-    });
+    await renderAndWaitForAuth();
 
     userEvent.click(screen.getByText('Login'));
 
