@@ -142,11 +142,10 @@ jobs:
 
       # Run analysis and upload results to SonarQube server
       - name: SonarQube scan
-        uses: SonarSource/sonarqube-scan-action@v6
+        uses: SonarSource/sonarqube-scan-action@v7
 
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       # Poll until the quality gate result is available (timeout 5 min)
       - name: SonarQube quality gate check
