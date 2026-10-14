@@ -151,6 +151,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_SCANNER_JAVA_HOME: ${{ env.JAVA_HOME }}
 
       # Poll until the quality gate result is available (timeout 5 min)
       - name: SonarQube quality gate check
