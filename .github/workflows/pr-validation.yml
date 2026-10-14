@@ -139,8 +139,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: coverage-backend
-          path:
-            projects/boutique-microservices/backend/coverage
+          path: projects/boutique-microservices/backend/coverage
 
       - name: SonarQube scan
         # Skip running the scanner for pull_request events because SonarCloud's
@@ -148,7 +147,7 @@ jobs:
         # reject duplicate CI analyses. Set RUN_SONAR_CI=true only after
         # disabling Automatic Analysis in SonarQube Cloud.
         if: ${{ github.event_name != 'pull_request' || env.RUN_SONAR_CI == 'true' }}
-        uses: SonarSource/sonarqube-scan-action@v7
+        uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2 # v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
@@ -176,7 +175,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Semgrep SAST
-        uses: semgrep/semgrep-action@v1
+        uses: semgrep/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d # v1
         continue-on-error: true # findings exit non-zero; don't abort the job
         with:
           config: >-
@@ -223,7 +222,7 @@ jobs:
         run: npm ci --prefix ${{ matrix.dir }}
 
       - name: Snyk dependency scan
-        uses: snyk/actions/node@master
+        uses: snyk/actions/node@11b673cfb4b0dc0d860a1323caa199d54950dcce # master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
