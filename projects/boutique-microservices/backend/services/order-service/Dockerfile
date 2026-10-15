@@ -3,7 +3,7 @@
 FROM node:20-alpine
 
 RUN apk upgrade --no-cache \
- && npm install -g npm@10
+ && npm install -g npm@11.18.0 && npm cache clean --force
 
 WORKDIR /app
 

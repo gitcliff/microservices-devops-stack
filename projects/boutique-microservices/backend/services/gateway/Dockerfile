@@ -22,10 +22,8 @@ RUN npm run build
 FROM node:22-alpine
 
 RUN apk upgrade --no-cache \
- && npm install -g npm@latest
+ && npm install -g npm@11.18.0 && npm cache clean --force
 
-RUN apk upgrade --no-cache \
- && npm install -g npm@10
 
 WORKDIR /app
 
