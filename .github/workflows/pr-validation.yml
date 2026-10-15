@@ -142,6 +142,7 @@ jobs:
           ignore-unfixed: true
           scanners: vuln,secret,config
           skip-dirs: "**/node_modules"
+          trivyignores: .trivyignore
           exit-code: "1"
 
   docker-build:
@@ -396,6 +397,10 @@ jobs:
       - name: Generate temporary lockfile for dependency scan
         if: ${{ !matrix.has-lockfile }}
         run: npm install --package-lock-only --ignore-scripts --prefix ${{ matrix.dir }}
+
+      - name: Install dependencies for dependency scan
+        if: ${{ !matrix.has-lockfile }}
+        run: npm install --ignore-scripts --no-audit --no-fund --prefix ${{ matrix.dir }}  
 
       - name: Snyk dependency scan
         uses: snyk/actions/node@11b673cfb4b0dc0d860a1323caa199d54950dcce # master

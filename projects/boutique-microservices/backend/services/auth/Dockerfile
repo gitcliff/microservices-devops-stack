@@ -7,9 +7,13 @@ WORKDIR /backend
 COPY services/auth/package*.json ./services/auth/
 RUN npm install --prefix ./services/auth
 
-COPY services/auth/src         ./services/auth/src
-COPY services/auth/tsconfig.json ./services/auth/tsconfig.json
-COPY shared                    ./shared
+# Symlink so shared/ can resolve deps from the service's node_modules
+RUN ln -s /backend/services/auth/node_modules /backend/node_modules
+
+COPY services/auth/src              ./services/auth/src
+COPY services/auth/tsconfig.json    ./services/auth/tsconfig.json
+COPY services/auth/tsconfig.build.json ./services/auth/tsconfig.build.json
+COPY shared                         ./shared
 
 WORKDIR /backend/services/auth
 RUN npm run build

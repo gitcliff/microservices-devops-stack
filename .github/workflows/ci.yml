@@ -133,6 +133,7 @@ jobs:
           ignore-unfixed: true
           scanners: vuln,secret,config
           skip-dirs: "**/node_modules"
+          trivyignores: .trivyignore
           exit-code: "1"
 
   # ============================================================

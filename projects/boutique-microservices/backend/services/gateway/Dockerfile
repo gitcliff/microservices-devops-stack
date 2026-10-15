@@ -7,9 +7,13 @@ WORKDIR /backend
 COPY services/gateway/package*.json ./services/gateway/
 RUN npm install --prefix ./services/gateway
 
-COPY services/gateway/src         ./services/gateway/src
-COPY services/gateway/tsconfig.json ./services/gateway/tsconfig.json
-COPY shared                        ./shared
+# Symlink so shared/ can resolve deps from the service's node_modules
+RUN ln -s /backend/services/gateway/node_modules /backend/node_modules
+
+COPY services/gateway/src              ./services/gateway/src
+COPY services/gateway/tsconfig.json    ./services/gateway/tsconfig.json
+COPY services/gateway/tsconfig.build.json ./services/gateway/tsconfig.build.json
+COPY shared                            ./shared
 
 WORKDIR /backend/services/gateway
 RUN npm run build

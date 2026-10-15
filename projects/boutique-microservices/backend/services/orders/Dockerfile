@@ -7,9 +7,13 @@ WORKDIR /backend
 COPY services/orders/package*.json ./services/orders/
 RUN npm install --prefix ./services/orders
 
-COPY services/orders/src         ./services/orders/src
-COPY services/orders/tsconfig.json ./services/orders/tsconfig.json
-COPY shared                      ./shared
+# Symlink so shared/ can resolve deps from the service's node_modules
+RUN ln -s /backend/services/orders/node_modules /backend/node_modules
+
+COPY services/orders/src              ./services/orders/src
+COPY services/orders/tsconfig.json    ./services/orders/tsconfig.json
+COPY services/orders/tsconfig.build.json ./services/orders/tsconfig.build.json
+COPY shared                           ./shared
 
 WORKDIR /backend/services/orders
 RUN npm run build

@@ -7,9 +7,13 @@ WORKDIR /backend
 COPY services/user-service/package*.json ./services/user-service/
 RUN npm install --prefix ./services/user-service
 
-COPY services/user-service/src         ./services/user-service/src
-COPY services/user-service/tsconfig.json ./services/user-service/tsconfig.json
-COPY shared                             ./shared
+# Symlink so shared/ can resolve deps from the service's node_modules
+RUN ln -s /backend/services/user-service/node_modules /backend/node_modules
+
+COPY services/user-service/src              ./services/user-service/src
+COPY services/user-service/tsconfig.json    ./services/user-service/tsconfig.json
+COPY services/user-service/tsconfig.build.json ./services/user-service/tsconfig.build.json
+COPY shared                                 ./shared
 
 WORKDIR /backend/services/user-service
 RUN npm run build

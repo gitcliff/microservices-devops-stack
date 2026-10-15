@@ -7,9 +7,13 @@ WORKDIR /backend
 COPY services/product-service/package*.json ./services/product-service/
 RUN npm install --prefix ./services/product-service
 
-COPY services/product-service/src         ./services/product-service/src
-COPY services/product-service/tsconfig.json ./services/product-service/tsconfig.json
-COPY shared                               ./shared
+# Symlink so shared/ can resolve deps from the service's node_modules
+RUN ln -s /backend/services/product-service/node_modules /backend/node_modules
+
+COPY services/product-service/src              ./services/product-service/src
+COPY services/product-service/tsconfig.json    ./services/product-service/tsconfig.json
+COPY services/product-service/tsconfig.build.json ./services/product-service/tsconfig.build.json
+COPY shared                                    ./shared
 
 WORKDIR /backend/services/product-service
 RUN npm run build
