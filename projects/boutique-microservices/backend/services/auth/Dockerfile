@@ -1,6 +1,6 @@
 # Auth Service Dockerfile
 # Build context: projects/boutique-microservices/backend/
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /backend
 
@@ -19,7 +19,7 @@ WORKDIR /backend/services/auth
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine
+FROM node:22-alpine
 
 RUN apk upgrade --no-cache \
  && npm install -g npm@latest

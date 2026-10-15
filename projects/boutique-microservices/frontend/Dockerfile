@@ -1,5 +1,5 @@
 # Frontend Dockerfile
-FROM node:20-alpine
+FROM node:22-alpine
 
 RUN apk upgrade --no-cache \
  && npm install -g npm@latest
