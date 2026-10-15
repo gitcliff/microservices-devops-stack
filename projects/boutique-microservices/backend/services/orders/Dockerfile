@@ -1,36 +1,36 @@
 # Orders Service Dockerfile
+# Build context: projects/boutique-microservices/backend/
 FROM node:20-alpine AS builder
 
-WORKDIR /app
+WORKDIR /backend
 
-# Copy package files
-COPY package*.json ./
-RUN npm install
+COPY services/orders/package*.json ./services/orders/
+RUN npm install --prefix ./services/orders
 
-# Copy source code
-COPY . .
+COPY services/orders/src         ./services/orders/src
+COPY services/orders/tsconfig.json ./services/orders/tsconfig.json
+COPY shared                      ./shared
 
-# Build TypeScript
+WORKDIR /backend/services/orders
 RUN npm run build
 
 # Production stage
 FROM node:20-alpine
 
+RUN apk upgrade --no-cache
+
 WORKDIR /app
 
-# Copy package files and install production dependencies only
-COPY package*.json ./
+COPY services/orders/package*.json ./
 RUN npm install --production && npm cache clean --force
 
-# Copy built application
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /backend/services/orders/dist ./dist
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
+RUN addgroup -g 1001 -S nodejs \
+ && adduser  -S nodejs -u 1001
 
 USER nodejs
 
 EXPOSE 3005
 
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/services/orders/src/index.js"]

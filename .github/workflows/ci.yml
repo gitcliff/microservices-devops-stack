@@ -132,6 +132,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           scanners: vuln,secret,config
+          skip-dirs: "**/node_modules"
           exit-code: "1"
 
   # ============================================================
@@ -165,20 +166,23 @@ jobs:
       - name: Build Docker Image
         run: |
 
-          if [ "${{ matrix.service }}" = "frontend" ]; then
-            BUILD_PATH="projects/boutique-microservices/frontend"
-          else
-            BUILD_PATH="projects/boutique-microservices/backend/services/${{ matrix.service }}"
-          fi
-
           IMAGE_NAME="${DOCKERHUB_USERNAME}/${{ matrix.service }}:${IMAGE_TAG}"
 
-          echo "Building from: $BUILD_PATH"
-          echo "Image: $IMAGE_NAME"
-
-          docker build \
-            --tag "$IMAGE_NAME" \
-            "$BUILD_PATH"
+          if [ "${{ matrix.service }}" = "frontend" ]; then
+            echo "Building frontend from: projects/boutique-microservices/frontend"
+            docker build \
+              --tag "$IMAGE_NAME" \
+              "projects/boutique-microservices/frontend"
+          else
+            # Backend services: use backend/ as context so shared/ is reachable.
+            # The Dockerfile is specified with --file; paths inside it are relative
+            # to the backend/ root.
+            echo "Building ${{ matrix.service }} from backend context"
+            docker build \
+              --tag "$IMAGE_NAME" \
+              --file "projects/boutique-microservices/backend/services/${{ matrix.service }}/Dockerfile" \
+              "projects/boutique-microservices/backend"
+          fi
 
       # ----------------------------------------------------------
       # Scan the exact image that will eventually be published

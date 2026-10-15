@@ -1,36 +1,36 @@
 # Product Service Dockerfile
+# Build context: projects/boutique-microservices/backend/
 FROM node:20-alpine AS builder
 
-WORKDIR /app
+WORKDIR /backend
 
-# Copy package files
-COPY package*.json ./
-RUN npm install
+COPY services/product-service/package*.json ./services/product-service/
+RUN npm install --prefix ./services/product-service
 
-# Copy source code
-COPY . .
+COPY services/product-service/src         ./services/product-service/src
+COPY services/product-service/tsconfig.json ./services/product-service/tsconfig.json
+COPY shared                               ./shared
 
-# Build TypeScript
+WORKDIR /backend/services/product-service
 RUN npm run build
 
 # Production stage
 FROM node:20-alpine
 
+RUN apk upgrade --no-cache
+
 WORKDIR /app
 
-# Copy package files and install production dependencies only
-COPY package*.json ./
+COPY services/product-service/package*.json ./
 RUN npm install --production && npm cache clean --force
 
-# Copy built application
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /backend/services/product-service/dist ./dist
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
+RUN addgroup -g 1001 -S nodejs \
+ && adduser  -S nodejs -u 1001
 
 USER nodejs
 
 EXPOSE 3003
 
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/services/product-service/src/index.js"]

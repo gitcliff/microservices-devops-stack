@@ -1,18 +1,18 @@
 # Order Service Dockerfile (JavaScript service)
+# Build context: projects/boutique-microservices/backend/
 FROM node:20-alpine
+
+RUN apk upgrade --no-cache
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+COPY services/order-service/package*.json ./
 RUN npm install --production && npm cache clean --force
 
-# Copy source code
-COPY . .
+COPY services/order-service/src ./src
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
+RUN addgroup -g 1001 -S nodejs \
+ && adduser  -S nodejs -u 1001
 
 USER nodejs
 
