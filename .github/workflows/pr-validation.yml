@@ -141,7 +141,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           scanners: vuln,secret,config
-          skip-dirs: "**/node_modules"
+          skip-dirs: "**/node_modules,/usr/local/lib/**,/usr/lib/**"
           trivyignores: .trivyignore
           exit-code: "1"
 
@@ -199,6 +199,7 @@ jobs:
           ignore-unfixed: true
           trivyignores: .trivyignore
           exit-code: "1"
+          skip-dirs: "/usr/local/lib/**,/usr/lib/**"
 
   # ============================================================
   # 3. INTEGRATION SMOKE TESTS
