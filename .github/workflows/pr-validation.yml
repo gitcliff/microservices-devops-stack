@@ -7,7 +7,7 @@ on:
     types: [opened, synchronize, reopened]
 
 concurrency:
-  group: pr-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -277,9 +277,10 @@ jobs:
     runs-on: ubuntu-latest
     # Only run CI analysis on non-PR events (e.g. push to main) or when
     # RUN_SONAR_CI=true (set only after disabling SonarCloud Automatic Analysis).
-    # On PRs without that variable, skip the entire job so it appears as "skipped"
-    # in branch protection — not "passed" — and SonarCloud's own status check
-    # remains the authoritative quality gate for PRs.
+    # On PRs without that variable, skip CI-based analysis. Branch protection or
+    # a ruleset must require SonarCloud's actual PR status check in this case;
+    # a skipped Actions job does not enforce that separate check. Required-check
+    # settings are configured in GitHub, not in this workflow.
     if: github.event_name != 'pull_request' || vars.RUN_SONAR_CI == 'true'
 
     permissions:
@@ -332,7 +333,7 @@ jobs:
 
       - name: Run Semgrep SAST
         uses: semgrep/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d # v1
-        continue-on-error: true # findings exit non-zero; don't abort the job
+        continue-on-error: false 
         with:
           config: >-
             p/typescript
@@ -402,7 +403,7 @@ jobs:
 
       - name: Install dependencies for dependency scan
         if: ${{ !matrix.has-lockfile }}
-        run: npm install --ignore-scripts --no-audit --no-fund --prefix ${{ matrix.dir }}  
+        run: npm install --ignore-scripts --no-audit --no-fund --prefix ${{ matrix.dir }}
 
       - name: Snyk dependency scan
         uses: snyk/actions/node@11b673cfb4b0dc0d860a1323caa199d54950dcce # master
@@ -413,3 +414,44 @@ jobs:
             --severity-threshold=high
             --fail-on=upgradable
             --file=${{ matrix.dir }}/package.json
+
+  # ============================================================
+  # MERGE GATE
+  #   Single status check for branch protection. Depends on every
+  #   job above; succeeds only when all required jobs pass (or are
+  #   legitimately skipped, e.g. sonarqube-gate on PRs).
+  # ============================================================
+  pr-gate:
+    name: PR Gate
+    if: always()
+    needs:
+      - gitleaks
+      - lint
+      - unit-tests
+      - trivy-fs
+      - docker-build
+      - integration-tests
+      # - sonarqube-gate
+      - sast
+      - dependency-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required job results
+        run: |
+          results=( \
+            "${{ needs.gitleaks.result }}" \
+            "${{ needs.lint.result }}" \
+            "${{ needs.unit-tests.result }}" \
+            "${{ needs.trivy-fs.result }}" \
+            "${{ needs.docker-build.result }}" \
+            "${{ needs.integration-tests.result }}" \
+            "${{ needs.sast.result }}" \
+            "${{ needs.dependency-scan.result }}" \
+          )
+          for r in "${results[@]}"; do
+            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
+              echo "❌ One or more required jobs did not pass (found: $r)"
+              exit 1
+            fi
+          done
+          echo "✅ All required jobs passed or were skipped"
