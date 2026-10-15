@@ -63,8 +63,8 @@ services:
   # API Gateway
   gateway:
     build:
-      context: ./backend/services/gateway
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: services/gateway/Dockerfile
     container_name: boutique-gateway
     ports:
       - "3001:3001"
@@ -86,8 +86,8 @@ services:
   # Auth Service
   auth:
     build:
-      context: ./backend/services/auth
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: services/auth/Dockerfile
     container_name: boutique-auth
     ports:
       - "3002:3002"
@@ -105,8 +105,8 @@ services:
   # Product Service
   product-service:
     build:
-      context: ./backend/services/product-service
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: services/product-service/Dockerfile
     container_name: boutique-products
     ports:
       - "3003:3003"
@@ -124,8 +124,8 @@ services:
   # Order Service
   order-service:
     build:
-      context: ./backend/services/order-service
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: services/order-service/Dockerfile
     container_name: boutique-orders
     ports:
       - "3004:3004"
@@ -149,8 +149,8 @@ services:
   # Orders Service (Order Management)
   orders:
     build:
-      context: ./backend/services/orders
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: services/orders/Dockerfile
     container_name: boutique-order-management
     ports:
       - "3005:3005"
@@ -168,8 +168,8 @@ services:
   # User Service
   user-service:
     build:
-      context: ./backend/services/user-service
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: services/user-service/Dockerfile
     container_name: boutique-users
     ports:
       - "3006:3006"

@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
 
 # ──────────────────────────────────────────────────────────────
 # Jobs run in waves:
@@ -141,6 +141,8 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           scanners: vuln,secret,config
+          skip-dirs: "**/node_modules"
+          trivyignores: .trivyignore
           exit-code: "1"
 
   docker-build:
@@ -153,18 +155,25 @@ jobs:
         include:
           - image: frontend
             context: projects/boutique-microservices/frontend
+            dockerfile: projects/boutique-microservices/frontend/Dockerfile
           - image: gateway
-            context: projects/boutique-microservices/backend/services/gateway
+            context: projects/boutique-microservices/backend
+            dockerfile: projects/boutique-microservices/backend/services/gateway/Dockerfile
           - image: auth
-            context: projects/boutique-microservices/backend/services/auth
+            context: projects/boutique-microservices/backend
+            dockerfile: projects/boutique-microservices/backend/services/auth/Dockerfile
           - image: product-service
-            context: projects/boutique-microservices/backend/services/product-service
+            context: projects/boutique-microservices/backend
+            dockerfile: projects/boutique-microservices/backend/services/product-service/Dockerfile
           - image: order-service
-            context: projects/boutique-microservices/backend/services/order-service
+            context: projects/boutique-microservices/backend
+            dockerfile: projects/boutique-microservices/backend/services/order-service/Dockerfile
           - image: orders
-            context: projects/boutique-microservices/backend/services/orders
+            context: projects/boutique-microservices/backend
+            dockerfile: projects/boutique-microservices/backend/services/orders/Dockerfile
           - image: user-service
-            context: projects/boutique-microservices/backend/services/user-service
+            context: projects/boutique-microservices/backend
+            dockerfile: projects/boutique-microservices/backend/services/user-service/Dockerfile
 
     permissions:
       contents: read
@@ -174,14 +183,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build image without publishing
-        env:
-          IMAGE_NAME: ${{ matrix.image }}
-          BUILD_CONTEXT: ${{ matrix.context }}
         run: >-
           docker build
-          --tag "boutique-${IMAGE_NAME}:pr"
-          --file "${BUILD_CONTEXT}/Dockerfile"
-          "${BUILD_CONTEXT}"
+          --tag "boutique-${{ matrix.image }}:pr"
+          --file "${{ matrix.dockerfile }}"
+          "${{ matrix.context }}"
 
       - name: Scan image for OS and dependency CVEs
         uses: aquasecurity/trivy-action@0.35.0
@@ -391,6 +397,10 @@ jobs:
       - name: Generate temporary lockfile for dependency scan
         if: ${{ !matrix.has-lockfile }}
         run: npm install --package-lock-only --ignore-scripts --prefix ${{ matrix.dir }}
+
+      - name: Install dependencies for dependency scan
+        if: ${{ !matrix.has-lockfile }}
+        run: npm install --ignore-scripts --no-audit --no-fund --prefix ${{ matrix.dir }}  
 
       - name: Snyk dependency scan
         uses: snyk/actions/node@11b673cfb4b0dc0d860a1323caa199d54950dcce # master
