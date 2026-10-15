@@ -14,10 +14,10 @@ env:
   NODE_VERSION: "20"
 
 # ──────────────────────────────────────────────────────────────
-# Jobs run in two waves:
-#   Wave 1 (parallel): lint | sast | dependency-scan
-#   Wave 2 (parallel): unit-tests
-#   Wave 3:            sonarqube-gate  (needs coverage artifacts)
+# Jobs run in waves:
+#   Wave 1 (parallel): lint/build | sast | dependency-scan | trivy-fs | docker-build
+#   Wave 2 (parallel): unit-tests | integration-tests (needs lint)
+#   Wave 3:            sonarqube-gate  (needs unit-tests coverage artifacts)
 # ──────────────────────────────────────────────────────────────
 
 jobs:
@@ -39,7 +39,7 @@ jobs:
   # 1. LINT
   # ============================================================
   lint:
-    name: Lint (${{ matrix.project }})
+    name: Lint and Build (${{ matrix.project }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -66,6 +66,18 @@ jobs:
 
       - name: Lint
         run: npm run lint --prefix ${{ matrix.dir }}
+
+      - name: Check JavaScript syntax (plain .js files not compiled by tsc)
+        if: ${{ matrix.project == 'backend' }}
+        run: |
+          find projects/boutique-microservices/backend/services \
+            -name "*.js" \
+            ! -path "*/node_modules/*" \
+            ! -path "*/dist/*" \
+            | xargs node --check
+
+      - name: Build
+        run: npm run build --prefix ${{ matrix.dir }}
 
   # ============================================================
   # 2. UNIT TESTS + COVERAGE  (80 % threshold enforced in jest)
@@ -109,16 +121,158 @@ jobs:
           path: ${{ matrix.dir }}/coverage/
           retention-days: 1
 
+  trivy-fs:
+    name: Trivy Filesystem Scan
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trivy repository scan
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          scanners: vuln,secret,config
+          exit-code: "1"
+
+  docker-build:
+    name: Docker Build (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - image: frontend
+            context: projects/boutique-microservices/frontend
+          - image: gateway
+            context: projects/boutique-microservices/backend/services/gateway
+          - image: auth
+            context: projects/boutique-microservices/backend/services/auth
+          - image: product-service
+            context: projects/boutique-microservices/backend/services/product-service
+          - image: order-service
+            context: projects/boutique-microservices/backend/services/order-service
+          - image: orders
+            context: projects/boutique-microservices/backend/services/orders
+          - image: user-service
+            context: projects/boutique-microservices/backend/services/user-service
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image without publishing
+        env:
+          IMAGE_NAME: ${{ matrix.image }}
+          BUILD_CONTEXT: ${{ matrix.context }}
+        run: >-
+          docker build
+          --tag "boutique-${IMAGE_NAME}:pr"
+          --file "${BUILD_CONTEXT}/Dockerfile"
+          "${BUILD_CONTEXT}"
+
+      - name: Scan image for OS and dependency CVEs
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: image
+          image-ref: boutique-${{ matrix.image }}:pr
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
   # ============================================================
-  # 3. SONARQUBE ANALYSIS + QUALITY GATE
+  # 3. INTEGRATION SMOKE TESTS
+  #    Starts postgres + auth + product-service via docker-compose and
+  #    validates health, register/login, and product-list responses.
+  #    Runs after lint so we only spin up services when the build is green.
+  # ============================================================
+  integration-tests:
+    name: Integration Smoke Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    defaults:
+      run:
+        working-directory: projects/boutique-microservices
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and start auth + product-service (and their postgres dependency)
+        run: docker compose up --build -d auth product-service
+
+      - name: Wait for auth service to be ready
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3002/health && break
+            echo "Waiting for auth (attempt $i/30)..."
+            sleep 3
+          done
+          curl -sf http://localhost:3002/health
+
+      - name: Wait for product-service to be ready
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3003/health && break
+            echo "Waiting for product-service (attempt $i/30)..."
+            sleep 3
+          done
+          curl -sf http://localhost:3003/health
+
+      - name: Smoke — register new user
+        run: |
+          out=$(curl -sf -X POST http://localhost:3002/register \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"ci@test.com","password":"ci-pass-123","firstName":"CI","lastName":"Test"}')
+          echo "$out"
+          echo "$out" | grep -q '"email"'
+
+      - name: Smoke — login
+        run: |
+          out=$(curl -sf -X POST http://localhost:3002/login \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"ci@test.com","password":"demo"}')
+          echo "$out"
+          echo "$out" | grep -q '"token"'
+
+      - name: Smoke — list products
+        run: |
+          out=$(curl -sf 'http://localhost:3003/?limit=1')
+          echo "$out"
+          echo "$out" | grep -q '"id"'
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  # ============================================================
+  # 4. SONARQUBE ANALYSIS + QUALITY GATE
   #    Runs after unit-tests so coverage is available
   # ============================================================
   sonarqube-gate:
     name: SonarQube Quality Gate
     needs: unit-tests
     runs-on: ubuntu-latest
-    env:
-      RUN_SONAR_CI: ${{ secrets.RUN_SONAR_CI }}
+    # Only run CI analysis on non-PR events (e.g. push to main) or when
+    # RUN_SONAR_CI=true (set only after disabling SonarCloud Automatic Analysis).
+    # On PRs without that variable, skip the entire job so it appears as "skipped"
+    # in branch protection — not "passed" — and SonarCloud's own status check
+    # remains the authoritative quality gate for PRs.
+    if: github.event_name != 'pull_request' || vars.RUN_SONAR_CI == 'true'
 
     permissions:
       contents: read
@@ -142,25 +296,19 @@ jobs:
           path: projects/boutique-microservices/backend/coverage
 
       - name: SonarQube scan
-        # Skip running the scanner for pull_request events because SonarCloud's
-        # Automatic Analysis (GitHub App) already runs the analysis and will
-        # reject duplicate CI analyses. Set RUN_SONAR_CI=true only after
-        # disabling Automatic Analysis in SonarQube Cloud.
-        if: ${{ github.event_name != 'pull_request' || env.RUN_SONAR_CI == 'true' }}
         uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2 # v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       # Poll until the quality gate result is available (timeout 15 min)
       - name: SonarQube quality gate check
-        if: ${{ github.event_name != 'pull_request' || env.RUN_SONAR_CI == 'true' }}
         uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
         timeout-minutes: 15
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   # ============================================================
-  # 4. SAST  —  Semgrep (runs in parallel with tests)
+  # 5. SAST  —  Semgrep (runs in parallel with tests)
   # ============================================================
   sast:
     name: SAST (Semgrep)
@@ -193,7 +341,7 @@ jobs:
           sarif_file: semgrep.sarif
 
   # ============================================================
-  # 5. DEPENDENCY SCAN  —  Snyk (runs in parallel with tests)
+  # 6. DEPENDENCY SCAN  —  Snyk (runs in parallel with tests)
   # ============================================================
   dependency-scan:
     name: Dependency Scan (${{ matrix.project }})
@@ -204,8 +352,28 @@ jobs:
         include:
           - project: frontend
             dir: projects/boutique-microservices/frontend
+            has-lockfile: true
           - project: backend
             dir: projects/boutique-microservices/backend
+            has-lockfile: true
+          - project: gateway
+            dir: projects/boutique-microservices/backend/services/gateway
+            has-lockfile: false
+          - project: auth
+            dir: projects/boutique-microservices/backend/services/auth
+            has-lockfile: false
+          - project: product-service
+            dir: projects/boutique-microservices/backend/services/product-service
+            has-lockfile: false
+          - project: order-service
+            dir: projects/boutique-microservices/backend/services/order-service
+            has-lockfile: false
+          - project: orders
+            dir: projects/boutique-microservices/backend/services/orders
+            has-lockfile: false
+          - project: user-service
+            dir: projects/boutique-microservices/backend/services/user-service
+            has-lockfile: false
 
     steps:
       - name: Checkout
@@ -215,11 +383,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: ${{ matrix.dir }}/package-lock.json
 
-      - name: Install dependencies
+      - name: Install dependencies from committed lockfile
+        if: ${{ matrix.has-lockfile }}
         run: npm ci --prefix ${{ matrix.dir }}
+
+      - name: Generate temporary lockfile for dependency scan
+        if: ${{ !matrix.has-lockfile }}
+        run: npm install --package-lock-only --ignore-scripts --prefix ${{ matrix.dir }}
 
       - name: Snyk dependency scan
         uses: snyk/actions/node@11b673cfb4b0dc0d860a1323caa199d54950dcce # master
