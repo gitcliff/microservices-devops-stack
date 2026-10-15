@@ -19,7 +19,10 @@ WORKDIR /backend/services/auth
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine
+FROM node:22-alpine
+
+RUN apk upgrade --no-cache \
+ && npm install -g npm@latest
 
 RUN apk upgrade --no-cache \
  && npm install -g npm@10
