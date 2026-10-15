@@ -1,6 +1,9 @@
 # Frontend Dockerfile
 FROM node:20-alpine
 
+RUN apk upgrade --no-cache \
+ && npm install -g npm@10
+
 WORKDIR /app
 
 # Copy package files
@@ -15,6 +18,10 @@ RUN npm run build
 
 # Install serve globally
 RUN npm install -g serve
+
+# Drop to non-root user for runtime (node user ships with node:alpine, uid 1000)
+RUN chown -R node:node /app
+USER node
 
 EXPOSE 3000
 
