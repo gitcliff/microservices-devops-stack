@@ -1,9 +1,9 @@
 # Order Service Dockerfile (JavaScript service)
 # Build context: projects/boutique-microservices/backend/
-FROM node:20-alpine
+FROM node:22-alpine
 
 RUN apk upgrade --no-cache \
- && npm install -g npm@10
+ && npm install -g npm@latest && npm cache clean --force
 
 WORKDIR /app
 

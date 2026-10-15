@@ -3,3 +3,7 @@
 # Cannot be upgraded without breaking @svgr/plugin-svgo 5.x API compatibility.
 CVE-2026-73650
 CVE-2026-84370
+
+# undici — transitive dependency bundled inside npm's own node_modules in the base Node image.
+# Not a direct application dependency. Fixed version not yet available in npm's bundled copy.
+CVE-2026-19534
