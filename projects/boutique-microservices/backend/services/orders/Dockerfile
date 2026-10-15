@@ -21,12 +21,13 @@ RUN npm run build
 # Production stage
 FROM node:20-alpine
 
-RUN apk upgrade --no-cache
+RUN apk upgrade --no-cache \
+ && npm install -g npm@latest
 
 WORKDIR /app
 
 COPY services/orders/package*.json ./
-RUN npm install --production && npm cache clean --force
+RUN npm install --omit=dev && npm cache clean --force
 
 COPY --from=builder /backend/services/orders/dist ./dist
 
