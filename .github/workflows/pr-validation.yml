@@ -132,7 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v40
+        uses: actions/checkout@v4
 
       - name: Trivy repository scan
         uses: aquasecurity/trivy-action@0.35.0
