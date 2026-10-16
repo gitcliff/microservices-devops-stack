@@ -6,15 +6,15 @@ A portfolio-grade microservices e-commerce application with a production-minded 
 
 ## Services
 
-| Service | Port | Description |
-|---------|------|-------------|
-| frontend | 3000 | React + TypeScript SPA (MUI) |
-| gateway | 3001 | API gateway / reverse proxy |
-| auth | 3002 | Authentication and JWT issuance |
-| product-service | 3003 | Product catalog (TypeScript) |
-| order-service | 3004 | Order processing (JavaScript) |
-| orders | 3005 | Order management (TypeScript) |
-| user-service | 3006 | User profiles (TypeScript) |
+| Service         | Port | Description                     |
+| --------------- | ---- | ------------------------------- |
+| frontend        | 3000 | React + TypeScript SPA (MUI)    |
+| gateway         | 3001 | API gateway / reverse proxy     |
+| auth            | 3002 | Authentication and JWT issuance |
+| product-service | 3003 | Product catalog (TypeScript)    |
+| order-service   | 3004 | Order processing (JavaScript)   |
+| orders          | 3005 | Order management (TypeScript)   |
+| user-service    | 3006 | User profiles (TypeScript)      |
 
 ---
 
@@ -46,10 +46,10 @@ flowchart TD
 
 ### Two-workflow model
 
-| Workflow | Trigger | Publishes images? | Exposes registry credentials? |
-|----------|---------|-------------------|-------------------------------|
-| `pr-validation.yml` | Pull requests to main | No | No |
-| `build-publish.yml` | Push to main / manual | Yes | Only after all gates pass |
+| Workflow            | Trigger               | Publishes images? | Exposes registry credentials? |
+| ------------------- | --------------------- | ----------------- | ----------------------------- |
+| `pr-validation.yml` | Pull requests to main | No                | No                            |
+| `build-publish.yml` | Push to main / manual | Yes               | Only after all gates pass     |
 
 **Why separate workflows?** PR validation runs untrusted contributor code. Mixing registry credentials into that workflow risks secret exposure. The publishing workflow runs only on trusted, merged code.
 
@@ -77,6 +77,7 @@ build-scan-sbom  (matrix × 7 services, parallel)
 ### What each job does
 
 **`build-scan-sbom`**
+
 1. Checks out the trusted source revision.
 2. Builds the production Docker image.
 3. Generates a CycloneDX JSON SBOM from the final image (evidence retained regardless of gate result).
@@ -84,6 +85,7 @@ build-scan-sbom  (matrix × 7 services, parallel)
 5. Saves the scanned image as a tar archive and uploads it as an artifact.
 
 **`publish`**
+
 1. Downloads the exact pre-scanned archive (no rebuild).
 2. Logs in to Docker Hub — credentials are only present in this job.
 3. Loads and pushes the SHA-tagged image.
@@ -91,6 +93,7 @@ build-scan-sbom  (matrix × 7 services, parallel)
 5. Captures and records the image digest.
 
 **`release-summary`**
+
 - Always runs; writes a structured digest table to the workflow summary.
 
 ---
@@ -104,16 +107,17 @@ docker.io/<DOCKERHUB_USERNAME>/boutique-<service>:<tag>
 ```
 
 Example:
+
 ```
-docker.io/myorg/boutique-auth:sha-a1b2c3d4e5f6...
+docker.io/myorg/boutique-auth:sha-<full-git-sha>
 ```
 
 ### Tags applied per publish
 
-| Tag | Example | Mutable? | Purpose |
-|-----|---------|----------|---------|
-| `sha-<full-git-sha>` | `sha-a1b2c3d4...` | No¹ | Primary deployment identifier |
-| `main` | `main` | Yes | Convenience pointer for scripts |
+| Tag                  | Example           | Mutable? | Purpose                         |
+| -------------------- | ----------------- | -------- | ------------------------------- |
+| `sha-<full-git-sha>` | `sha-a1b2c3d4...` | No¹      | Primary deployment identifier   |
+| `main`               | `main`            | Yes      | Convenience pointer for scripts |
 
 ¹ Tags are immutable by content-addressed digest, but Docker Hub does not enforce tag-name immutability on free plans. A tag name can be overwritten by pushing again. Use the digest for guaranteed identity (see below).
 
@@ -121,15 +125,16 @@ docker.io/myorg/boutique-auth:sha-a1b2c3d4e5f6...
 
 ### Tag vs. digest
 
-| Concept | Example | Mutable? |
-|---------|---------|----------|
-| Tag | `boutique-auth:sha-abc123` | Yes — a name can be reassigned |
-| Digest | `boutique-auth@sha256:def456...` | No — content-addressed |
+| Concept | Example                          | Mutable?                       |
+| ------- | -------------------------------- | ------------------------------ |
+| Tag     | `boutique-auth:sha-abc123`       | Yes — a name can be reassigned |
+| Digest  | `boutique-auth@sha256:def456...` | No — content-addressed         |
 
 To pull a specific, immutable image:
+
 ```bash
 # By SHA tag (usually sufficient)
-docker pull myorg/boutique-auth:sha-a1b2c3d4e5f6...
+docker pull myorg/boutique-auth:sha-<full-git-sha>
 
 # By digest (guaranteed identity, unaffected by tag mutation)
 docker pull myorg/boutique-auth@sha256:def456...
@@ -141,18 +146,19 @@ Digests for each run are recorded in the workflow summary and as downloadable ar
 
 ## Vulnerability Policy
 
-| Severity | Fixed | Action |
-|----------|-------|--------|
-| CRITICAL | Available | Block publish |
-| HIGH | Available | Block publish |
-| CRITICAL / HIGH | No fix available | Allowed (--ignore-unfixed) |
-| MEDIUM and below | Any | Allowed |
+| Severity         | Fixed            | Action                     |
+| ---------------- | ---------------- | -------------------------- |
+| CRITICAL         | Available        | Block publish              |
+| HIGH             | Available        | Block publish              |
+| CRITICAL / HIGH  | No fix available | Allowed (--ignore-unfixed) |
+| MEDIUM and below | Any              | Allowed                    |
 
 **Rationale for `--ignore-unfixed`:** base images and npm tooling frequently carry unfixed CVEs with no available remediation. Blocking on these would prevent publishing otherwise-clean services. This is a documented trade-off, not silent suppression.
 
 ### Exceptions
 
 Documented exceptions are in `.trivyignore` at the repo root. Each entry must include:
+
 - CVE ID
 - Affected package and scope (build-time only, OS package, etc.)
 - Rationale (why blocking is not appropriate)
@@ -175,11 +181,13 @@ Do not add CVE IDs to `.trivyignore` merely to make CI green.
 **When generated:** Before the vulnerability gate — retained even if the gate blocks publication.
 
 **Limitations:**
+
 - SBOMs are stored as GitHub Actions artifacts, not attached to Docker Hub images.
 - SBOMs are not cryptographically signed or attested in the current implementation.
 - Attestation via `docker buildx imagetools` or `cosign` is a documented future enhancement.
 
 To download an SBOM:
+
 ```
 GitHub Actions run → Artifacts → sbom-boutique-<service>
 ```
@@ -194,8 +202,8 @@ You must configure the following in your GitHub repository settings before the w
 
 `Settings → Secrets and variables → Actions → Variables → New repository variable`
 
-| Name | Value |
-|------|-------|
+| Name                 | Value                                    |
+| -------------------- | ---------------------------------------- |
 | `DOCKERHUB_USERNAME` | Your Docker Hub username or organisation |
 
 Variables are not secrets — they appear in logs and can be referenced in expressions safely.
@@ -204,8 +212,8 @@ Variables are not secrets — they appear in logs and can be referenced in expre
 
 `Settings → Secrets and variables → Actions → Secrets → New repository secret`
 
-| Name | Value |
-|------|-------|
+| Name              | Value                              |
+| ----------------- | ---------------------------------- |
 | `DOCKERHUB_TOKEN` | A Docker Hub Personal Access Token |
 
 **Create the PAT on Docker Hub:** Account Settings → Security → New Access Token.
