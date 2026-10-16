@@ -10,6 +10,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   NODE_VERSION: "22"
 
@@ -24,6 +27,9 @@ jobs:
   gitleaks:
     name: Secret Scanning
     runs-on: ubuntu-latest
+    # Skip on forked PRs — GITHUB_TOKEN has limited scope and gitleaks-action
+    # requires the GITLEAKS_LICENSE secret which is not available from forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -124,10 +130,6 @@ jobs:
   trivy-fs:
     name: Trivy Filesystem Scan
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -174,9 +176,6 @@ jobs:
           - image: user-service
             context: projects/boutique-microservices/backend
             dockerfile: projects/boutique-microservices/backend/services/user-service/Dockerfile
-
-    permissions:
-      contents: read
 
     steps:
       - name: Checkout
@@ -275,16 +274,12 @@ jobs:
     name: SonarQube Quality Gate
     needs: unit-tests
     runs-on: ubuntu-latest
-    # Only run CI analysis on non-PR events (e.g. push to main) or when
-    # RUN_SONAR_CI=true (set only after disabling SonarCloud Automatic Analysis).
-    # On PRs without that variable, skip CI-based analysis. Branch protection or
-    # a ruleset must require SonarCloud's actual PR status check in this case;
-    # a skipped Actions job does not enforce that separate check. Required-check
-    # settings are configured in GitHub, not in this workflow.
-    if: github.event_name != 'pull_request' || vars.RUN_SONAR_CI == 'true'
-
-    permissions:
-      contents: read
+    # Optional job — skipped on PRs unless RUN_SONAR_CI=true or on forked PRs
+    # (SONAR_TOKEN unavailable). Branch protection enforces SonarCloud's own
+    # PR status check separately; this Actions job is not the gate for that.
+    if: >-
+      (github.event_name != 'pull_request' || vars.RUN_SONAR_CI == 'true')
+      && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
     steps:
       - name: Checkout
@@ -324,7 +319,6 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
       security-events: write # required for SARIF upload
 
     steps:
@@ -355,34 +349,28 @@ jobs:
   dependency-scan:
     name: Dependency Scan (${{ matrix.project }})
     runs-on: ubuntu-latest
+    # Skip on forked PRs — SNYK_TOKEN is not available from forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       fail-fast: false
       matrix:
         include:
           - project: frontend
             dir: projects/boutique-microservices/frontend
-            has-lockfile: true
           - project: backend
             dir: projects/boutique-microservices/backend
-            has-lockfile: true
           - project: gateway
             dir: projects/boutique-microservices/backend/services/gateway
-            has-lockfile: false
           - project: auth
             dir: projects/boutique-microservices/backend/services/auth
-            has-lockfile: false
           - project: product-service
             dir: projects/boutique-microservices/backend/services/product-service
-            has-lockfile: false
           - project: order-service
             dir: projects/boutique-microservices/backend/services/order-service
-            has-lockfile: false
           - project: orders
             dir: projects/boutique-microservices/backend/services/orders
-            has-lockfile: false
           - project: user-service
             dir: projects/boutique-microservices/backend/services/user-service
-            has-lockfile: false
 
     steps:
       - name: Checkout
@@ -393,17 +381,8 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install dependencies from committed lockfile
-        if: ${{ matrix.has-lockfile }}
+      - name: Install dependencies
         run: npm ci --prefix ${{ matrix.dir }}
-
-      - name: Generate temporary lockfile for dependency scan
-        if: ${{ !matrix.has-lockfile }}
-        run: npm install --package-lock-only --ignore-scripts --prefix ${{ matrix.dir }}
-
-      - name: Install dependencies for dependency scan
-        if: ${{ !matrix.has-lockfile }}
-        run: npm install --ignore-scripts --no-audit --no-fund --prefix ${{ matrix.dir }}
 
       - name: Snyk dependency scan
         uses: snyk/actions/node@11b673cfb4b0dc0d860a1323caa199d54950dcce # master
@@ -418,8 +397,9 @@ jobs:
   # ============================================================
   # MERGE GATE
   #   Single status check for branch protection. Depends on every
-  #   job above; succeeds only when all required jobs pass (or are
-  #   legitimately skipped, e.g. sonarqube-gate on PRs).
+  #   job above. Mandatory jobs must succeed; documented optional
+  #   jobs (sonarqube-gate) and fork-skippable jobs (gitleaks,
+  #   dependency-scan) may be skipped.
   # ============================================================
   pr-gate:
     name: PR Gate
@@ -431,27 +411,48 @@ jobs:
       - trivy-fs
       - docker-build
       - integration-tests
-      # - sonarqube-gate
+      - sonarqube-gate
       - sast
       - dependency-scan
     runs-on: ubuntu-latest
     steps:
-      - name: Check required job results
+      - name: Evaluate job results
         run: |
-          results=( \
-            "${{ needs.gitleaks.result }}" \
-            "${{ needs.lint.result }}" \
-            "${{ needs.unit-tests.result }}" \
-            "${{ needs.trivy-fs.result }}" \
-            "${{ needs.docker-build.result }}" \
-            "${{ needs.integration-tests.result }}" \
-            "${{ needs.sast.result }}" \
-            "${{ needs.dependency-scan.result }}" \
-          )
-          for r in "${results[@]}"; do
-            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
-              echo "❌ One or more required jobs did not pass (found: $r)"
-              exit 1
+          failed=0
+
+          # ── Mandatory jobs: must succeed ──
+          for pair in \
+            "lint:${{ needs.lint.result }}" \
+            "unit-tests:${{ needs.unit-tests.result }}" \
+            "trivy-fs:${{ needs.trivy-fs.result }}" \
+            "docker-build:${{ needs.docker-build.result }}" \
+            "integration-tests:${{ needs.integration-tests.result }}" \
+            "sast:${{ needs.sast.result }}"; do
+            job="${pair%%:*}"
+            result="${pair#*:}"
+            if [[ "$result" != "success" ]]; then
+              echo "❌ Mandatory job '$job' did not succeed (result: $result)"
+              failed=1
             fi
           done
-          echo "✅ All required jobs passed or were skipped"
+
+          # ── Optional / fork-skippable jobs: success or skipped ──
+          # sonarqube-gate: optional, controlled by RUN_SONAR_CI var
+          # gitleaks: skipped on forked PRs (no GITLEAKS_LICENSE)
+          # dependency-scan: skipped on forked PRs (no SNYK_TOKEN)
+          for pair in \
+            "sonarqube-gate:${{ needs.sonarqube-gate.result }}" \
+            "gitleaks:${{ needs.gitleaks.result }}" \
+            "dependency-scan:${{ needs.dependency-scan.result }}"; do
+            job="${pair%%:*}"
+            result="${pair#*:}"
+            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+              echo "❌ Optional job '$job' failed (result: $result)"
+              failed=1
+            fi
+          done
+
+          if [[ "$failed" -eq 1 ]]; then
+            exit 1
+          fi
+          echo "✅ All required jobs passed"
