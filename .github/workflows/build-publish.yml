@@ -240,7 +240,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Load image from archive
@@ -252,7 +252,7 @@ jobs:
       - name: Tag and push SHA image
         id: push-sha
         run: |
-          REMOTE="${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ env.IMAGE_TAG }}"
+          REMOTE="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ env.IMAGE_TAG }}"
           docker tag "${{ matrix.image }}:${{ env.IMAGE_TAG }}" "$REMOTE"
           docker push "$REMOTE"
 
@@ -275,7 +275,7 @@ jobs:
       - name: Tag and push 'main' moving alias
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          ALIAS="${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.image }}:main"
+          ALIAS="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:main"
           docker tag "${{ matrix.image }}:${{ env.IMAGE_TAG }}" "$ALIAS"
           docker push "$ALIAS"
 
