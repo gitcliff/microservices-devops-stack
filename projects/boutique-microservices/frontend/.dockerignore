@@ -1,0 +1,26 @@
+# Prevent unnecessary files from entering the frontend build context.
+# Keeping the context small speeds up builds and avoids copying
+# sensitive files or large build artifacts into image layers.
+
+# Version control — never copy .git into an image layer
+.git
+.gitignore
+
+# Build outputs — rebuilt inside the container
+build/
+coverage/
+
+# Development dependencies and local state
+node_modules/
+npm-debug.log*
+
+# Environment files — must never be baked into images
+.env
+.env.*
+!.env.example
+
+# CI / editor / OS noise
+.github/
+.vscode/
+.DS_Store
+*.md

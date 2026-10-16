@@ -1,0 +1,35 @@
+title = "Boutique Microservices — Gitleaks configuration"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# GLOBAL ALLOWLIST
+#
+# These entries mark known, intentional development-only credentials that are
+# committed to the repository by design. They are NOT real secrets and carry no
+# production risk.
+#
+# Policy for adding entries:
+#   1. Include the credential value as a regex.
+#   2. State why it is safe (e.g. local-only, no external access).
+#   3. Name the owner and a review date.
+#   4. Never allowlist real secrets here — rotate them instead.
+# ──────────────────────────────────────────────────────────────────────────────
+
+[allowlist]
+  description = "Intentional local-development credentials"
+
+  regexes = [
+    # docker-compose.yml — PostgreSQL local dev password.
+    # Used only inside the Docker Compose network; never exposed externally.
+    # Owner: repo maintainer | Review: 2027-01
+    '''postgres123''',
+
+    # user-service/src/routes/users.ts and test files — JWT fallback placeholder.
+    # Only active when JWT_SECRET env var is not set (local dev without .env).
+    # Owner: repo maintainer | Review: 2027-01
+    '''your-secret-key''',
+
+    # auth service — hardcoded demo password accepted by /login for demo accounts.
+    # Intentional demo behaviour documented in auth service README.
+    # Owner: repo maintainer | Review: 2027-01
+    '''(?i)password\s*===?\s*['"]demo['"]''',
+  ]
