@@ -1,0 +1,345 @@
+name: Build, Scan & Publish
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Trigger: every push that lands on main (post-PR-merge) and on-demand
+# dispatch. Publishing from untrusted branches is not supported.
+#
+# Trust boundary: registry credentials are exposed only in the 'publish' job,
+# which runs after all security gates have passed.
+# ──────────────────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Prevent two publish runs from racing on the same ref.
+# cancel-in-progress: false — a running publish must never be interrupted;
+# a partial push would leave the registry in an inconsistent state.
+concurrency:
+  group: build-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+# Least-privilege default. Jobs that push to Docker Hub need no GitHub
+# token write permissions; DOCKERHUB_TOKEN is sufficient.
+permissions:
+  contents: read
+
+env:
+  # Full 40-character SHA with prefix — unique, unambiguous, and directly
+  # traceable to the source commit. Never use 'latest' as a deployment tag.
+  IMAGE_TAG: sha-${{ github.sha }}
+
+jobs:
+  # ============================================================
+  # 1. BUILD  →  SBOM  →  VULNERABILITY GATE
+  #
+  # Each service is built exactly once. The SBOM is generated from
+  # the final image BEFORE the vulnerability gate so that evidence
+  # is retained even when the gate blocks publication.
+  #
+  # The scanned image is saved as a tar archive and uploaded as an
+  # artifact. The publish job loads and pushes that same archive,
+  # guaranteeing the published image is identical to the scanned one.
+  # ============================================================
+  build-scan-sbom:
+    name: Build, SBOM & Scan (${{ matrix.image }})
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    strategy:
+      # Allow all matrix entries to complete so every service is
+      # diagnosed independently before the job result is determined.
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          # ── Frontend ──────────────────────────────────────────
+          # Standalone build context; no shared/ dependency.
+          - image: boutique-frontend
+            context: projects/boutique-microservices/frontend
+            dockerfile: projects/boutique-microservices/frontend/Dockerfile
+
+          # ── Backend services ──────────────────────────────────
+          # All backend services use backend/ as their build context
+          # so the shared/ library is reachable from each Dockerfile.
+          - image: boutique-gateway
+            context: projects/boutique-microservices/backend
+            dockerfile: projects/boutique-microservices/backend/services/gateway/Dockerfile
+
+          - image: boutique-auth
+            context: projects/boutique-microservices/backend
+            dockerfile: projects/boutique-microservices/backend/services/auth/Dockerfile
+
+          - image: boutique-product-service
+            context: projects/boutique-microservices/backend
+            dockerfile: projects/boutique-microservices/backend/services/product-service/Dockerfile
+
+          # order-service is a plain JavaScript service (no TypeScript build).
+          - image: boutique-order-service
+            context: projects/boutique-microservices/backend
+            dockerfile: projects/boutique-microservices/backend/services/order-service/Dockerfile
+
+          - image: boutique-orders
+            context: projects/boutique-microservices/backend
+            dockerfile: projects/boutique-microservices/backend/services/orders/Dockerfile
+
+          - image: boutique-user-service
+            context: projects/boutique-microservices/backend
+            dockerfile: projects/boutique-microservices/backend/services/user-service/Dockerfile
+
+    steps:
+      # Check out the trusted revision that triggered the workflow.
+      - name: Checkout trusted source revision
+        uses: actions/checkout@v4
+
+      # ── BUILD ────────────────────────────────────────────────
+      # Build the final production image into the local Docker daemon
+      # so that subsequent scan and save steps operate on exactly the
+      # same image layer stack.
+      - name: Build image
+        run: |
+          docker build \
+            --tag "${{ matrix.image }}:${{ env.IMAGE_TAG }}" \
+            --file "${{ matrix.dockerfile }}" \
+            "${{ matrix.context }}"
+
+      # ── SBOM ────────────────────────────────────────────────
+      # Generate a CycloneDX JSON SBOM from the built image.
+      # Runs BEFORE the vulnerability gate so the SBOM is always
+      # retained as evidence even when the gate blocks publication.
+      # The SBOM describes package inventory independent of whether
+      # those packages have known CVEs today.
+      - name: Create SBOM output directory
+        run: mkdir -p sbom
+
+      - name: Generate SBOM (CycloneDX JSON)
+        # aquasecurity/trivy-action 0.35.0 — keep in sync with pr-validation.yml
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          scan-type: image
+          image-ref: "${{ matrix.image }}:${{ env.IMAGE_TAG }}"
+          format: cyclonedx
+          output: "sbom/${{ matrix.image }}-${{ env.IMAGE_TAG }}.cdx.json"
+          # exit-code 0: SBOM generation is evidence collection, not a gate.
+          # Vulnerabilities are enforced in the dedicated scan step below.
+          exit-code: "0"
+
+      # Upload unconditionally (if: always()) so evidence is retained
+      # even when the vulnerability gate later fails.
+      # if-no-files-found: error ensures a silently missing SBOM causes
+      # a visible failure rather than a misleading green status.
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "sbom-${{ matrix.image }}"
+          path: "sbom/${{ matrix.image }}-${{ env.IMAGE_TAG }}.cdx.json"
+          retention-days: 30
+          if-no-files-found: error
+
+      # ── VULNERABILITY GATE ───────────────────────────────────
+      # Policy: block publication when HIGH or CRITICAL findings are
+      # present in OS packages or application dependencies.
+      #
+      # --ignore-unfixed mirrors the PR validation policy: unfixed CVEs
+      # exist in many base images and blocking on them prevents
+      # publishing otherwise-clean images. This is a documented
+      # trade-off, not a silent suppression.
+      #
+      # Exceptions are recorded in .trivyignore at the repo root.
+      # Each entry must document: CVE ID, affected scope, rationale,
+      # owner, and a review date.
+      #
+      # skip-dirs is intentionally omitted. Excluding system library
+      # paths hides relevant packages and masks real risk.
+      - name: Scan image for vulnerabilities (HIGH/CRITICAL gate)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          scan-type: image
+          image-ref: "${{ matrix.image }}:${{ env.IMAGE_TAG }}"
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          scanners: vuln,secret
+          trivyignores: .trivyignore
+          exit-code: "1"
+
+      # ── PRESERVE SCANNED IMAGE ───────────────────────────────
+      # Save the exact image that passed the gate as a tar archive.
+      # This step runs only when the vulnerability gate above passes.
+      # The publish job loads and pushes this archive, not a rebuild.
+      - name: Save scanned image as archive
+        run: |
+          mkdir -p /tmp/docker-images
+          docker save \
+            "${{ matrix.image }}:${{ env.IMAGE_TAG }}" \
+            -o "/tmp/docker-images/${{ matrix.image }}.tar"
+
+      - name: Upload image archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "image-${{ matrix.image }}"
+          path: "/tmp/docker-images/${{ matrix.image }}.tar"
+          # Short retention: only needed for the publish job in this run.
+          retention-days: 1
+          if-no-files-found: error
+
+  # ============================================================
+  # 2. PUBLISH
+  #
+  # Downloads the exact image archive that passed the scan gate
+  # and pushes it to Docker Hub. Registry credentials are never
+  # exposed to the build or scan job.
+  #
+  # This job runs only when ALL build-scan-sbom matrix entries
+  # succeed. One failing vulnerability gate blocks all publishes,
+  # ensuring a cohesive, fully-vetted release.
+  # ============================================================
+  publish:
+    name: Publish (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    needs: build-scan-sbom
+
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        # Mirror the image list from build-scan-sbom exactly so artifact
+        # names match between the upload and download steps.
+        include:
+          - image: boutique-frontend
+          - image: boutique-gateway
+          - image: boutique-auth
+          - image: boutique-product-service
+          - image: boutique-order-service
+          - image: boutique-orders
+          - image: boutique-user-service
+
+    steps:
+      # No code checkout needed — this job works exclusively with
+      # the pre-built, pre-scanned archive from build-scan-sbom.
+      - name: Download image archive
+        uses: actions/download-artifact@v4
+        with:
+          name: "image-${{ matrix.image }}"
+          path: /tmp/docker-images
+
+      # Log in only after all security gates have passed and only in
+      # the job that performs the push. Credentials are never present
+      # in build or scan jobs.
+      #
+      # Required configuration (GitHub repo Settings):
+      #   Variables → Actions:  DOCKERHUB_USERNAME  (your Docker Hub username)
+      #   Secrets  → Actions:   DOCKERHUB_TOKEN     (Docker Hub PAT, Read+Write)
+      #
+      - name: Log in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Load image from archive
+        run: docker load --input "/tmp/docker-images/${{ matrix.image }}.tar"
+
+      # Apply the immutable SHA tag and push.
+      # The sha- prefix distinguishes this from branch aliases and
+      # version tags at a glance.
+      - name: Tag and push SHA image
+        id: push-sha
+        run: |
+          REMOTE="${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ env.IMAGE_TAG }}"
+          docker tag "${{ matrix.image }}:${{ env.IMAGE_TAG }}" "$REMOTE"
+          docker push "$REMOTE"
+
+          # RepoDigests is populated by Docker after a successful push.
+          # A digest uniquely identifies image content independent of any tag.
+          # Tags are mutable; digests are not (content-addressed storage).
+          # Note: Docker Hub does not enforce tag immutability by policy on
+          # free plans. See README for Docker Hub configuration guidance.
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$REMOTE" 2>/dev/null \
+                   || echo "digest-unavailable")
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "remote=${REMOTE}"   >> "$GITHUB_OUTPUT"
+
+      # Apply the moving 'main' alias only on push-to-main events.
+      # workflow_dispatch runs do not apply this alias regardless of
+      # which ref is selected, preventing accidental main pointer drift
+      # from manual runs on non-main branches.
+      # 'main' is a convenience pointer; never use it as a deployment
+      # identifier in production — it is a mutable tag.
+      - name: Tag and push 'main' moving alias
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          ALIAS="${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.image }}:main"
+          docker tag "${{ matrix.image }}:${{ env.IMAGE_TAG }}" "$ALIAS"
+          docker push "$ALIAS"
+
+      - name: Record image digest
+        run: |
+          mkdir -p /tmp/digests
+          printf '%s\n' "${{ steps.push-sha.outputs.digest }}" \
+            > "/tmp/digests/${{ matrix.image }}.txt"
+
+      - name: Upload digest record
+        uses: actions/upload-artifact@v4
+        with:
+          name: "digest-${{ matrix.image }}"
+          path: "/tmp/digests/${{ matrix.image }}.txt"
+          retention-days: 30
+          if-no-files-found: warn
+
+  # ============================================================
+  # 3. RELEASE SUMMARY
+  #
+  # Collects per-service digest records and writes a structured
+  # workflow summary. Always runs so that partial failures are
+  # visible rather than silently swallowed.
+  # ============================================================
+  release-summary:
+    name: Release Summary
+    runs-on: ubuntu-latest
+    needs: publish
+    if: always()
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download all digest records
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "digest-*"
+          path: /tmp/digests
+          merge-multiple: true
+        # A missing digest (publish failed) is not fatal for the summary step;
+        # the summary reports whatever digests are available.
+        continue-on-error: true
+
+      - name: Write workflow summary
+        run: |
+          {
+            echo "## Boutique Build & Publish Summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Commit  | \`${{ github.sha }}\` |"
+            echo "| Tag     | \`${{ env.IMAGE_TAG }}\` |"
+            echo "| Trigger | \`${{ github.event_name }}\` |"
+            echo "| Actor   | \`${{ github.actor }}\` |"
+            echo ""
+            echo "### Published Images"
+            echo ""
+            echo "| Image | Digest |"
+            echo "|-------|--------|"
+            for f in /tmp/digests/*.txt; do
+              [ -f "$f" ] || continue
+              image=$(basename "$f" .txt)
+              digest=$(cat "$f" 2>/dev/null || echo "unavailable")
+              echo "| \`${image}\` | \`${digest}\` |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

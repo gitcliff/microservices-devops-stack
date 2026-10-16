@@ -1,0 +1,36 @@
+# Prevent unnecessary files from entering the backend build context.
+# All backend services share this context (backend/) so that the
+# shared/ library is reachable. Excluding large or sensitive paths
+# keeps context transfer fast and images clean.
+
+# Version control — never copy .git into an image layer
+.git
+.gitignore
+
+# Build outputs — rebuilt inside each service's container
+services/*/dist/
+coverage/
+
+# Development dependencies
+# Each Dockerfile installs only what it needs (--omit=dev).
+# The root and service node_modules are not needed at context-transfer time;
+# Dockerfiles run npm install inside the container.
+node_modules/
+services/*/node_modules/
+
+# Environment files — must never be baked into images
+.env
+.env.*
+!.env.example
+services/*/.env
+services/*/.env.*
+
+# Test files — not needed in production images
+services/*/__tests__/
+services/*/*.test.*
+services/*/*.spec.*
+jest.config.*
+
+# CI / editor / OS noise
+.DS_Store
+npm-debug.log*

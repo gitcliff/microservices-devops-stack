@@ -49,7 +49,9 @@ ehthumbs.db
 Thumbs.db
 
 # Docker
-.dockerignore
+# .dockerignore files are intentionally tracked — they are required
+# configuration for the CI build pipeline and must exist in the checkout.
+!.dockerignore
 
 # Temporary files
 *.tmp
