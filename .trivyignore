@@ -7,3 +7,40 @@ CVE-2026-84370
 # undici — transitive dependency bundled inside npm's own node_modules in the base Node image.
 # Not a direct application dependency. Fixed version not yet available in npm's bundled copy.
 CVE-2026-19534
+
+# ── npm-internal packages in node:22-alpine ───────────────────────────────────
+#
+# The following CVEs affect packages that are bundled inside npm's own private
+# node_modules directory (/usr/local/lib/node_modules/npm/node_modules/).
+# They are NOT application dependencies and cannot be upgraded by the project.
+# Remediation requires a Node.js/npm base-image update that ships patched
+# bundled versions. All are confirmed npm-internal via container inspection.
+# Owner: repo maintainer | Review: 2027-04
+#
+# brace-expansion (v5.0.9 in npm bundled by node:22-alpine with npm@latest)
+# DoS via crafted glob patterns. Not reachable through application code paths.
+# Fixed in brace-expansion 5.0.10+ — awaiting npm release that bundles it.
+CVE-2026-102276
+CVE-2026-102278
+#
+# brace-expansion (v2.0.2 in npm bundled by node:22-alpine default npm)
+# Same DoS class of vulnerability in the 1.x/2.x branch.
+# Fixed in brace-expansion 2.1.2+ — awaiting npm release that bundles it.
+CVE-2026-13149
+CVE-2026-14257
+CVE-2026-69152
+#
+# compression (v1.8.1) — npm-internal; memory-leak DoS. Fixed in 1.8.2.
+CVE-2026-87776
+#
+# ip-address (v10.1.0) — npm-internal; inconsistent IP parsing. Fixed in 10.3.1.
+CVE-2026-69192
+#
+# pacote (v19.0.2) — npm-internal package fetcher; DoS via crafted rawSpec. Fixed in 21.5.1.
+CVE-2026-9496
+#
+# picomatch (v4.0.3) — npm-internal; ReDoS. Fixed in 4.0.4.
+CVE-2026-33671
+#
+# sigstore (v3.1.0) — npm-internal provenance client; unauthorised cert acceptance. Fixed in 4.1.1.
+CVE-2026-48815
