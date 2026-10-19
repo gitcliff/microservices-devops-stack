@@ -241,8 +241,10 @@ jobs:
       # version tags at a glance.
       - name: Tag and push SHA image
         id: push-sha
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          REMOTE="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ env.IMAGE_TAG }}"
+          REMOTE="${DOCKERHUB_USERNAME}/${{ matrix.image }}:${{ env.IMAGE_TAG }}"
           docker tag "${{ matrix.image }}:${{ env.IMAGE_TAG }}" "$REMOTE"
           docker push "$REMOTE"
 
@@ -264,8 +266,10 @@ jobs:
       # identifier in production — it is a mutable tag.
       - name: Tag and push 'main' moving alias
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          ALIAS="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:main"
+          ALIAS="${DOCKERHUB_USERNAME}/${{ matrix.image }}:main"
           docker tag "${{ matrix.image }}:${{ env.IMAGE_TAG }}" "$ALIAS"
           docker push "$ALIAS"
 
