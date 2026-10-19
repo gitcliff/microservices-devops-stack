@@ -3,7 +3,7 @@
 FROM node:22-alpine
 
 RUN apk upgrade --no-cache \
- && npm install -g npm@latest --ignore-scripts && npm cache clean --force
+ && npm install -g npm@10.9.2 --ignore-scripts && npm cache clean --force
 
 WORKDIR /app
 
