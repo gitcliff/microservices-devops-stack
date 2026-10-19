@@ -20,6 +20,11 @@ severity:
 # Base images and npm tooling frequently carry unfixed CVEs with no upstream
 # remediation path. Blocking on them prevents publishing otherwise-clean images.
 # This is a documented trade-off, not silent suppression. See README.md.
+#
+# Important scope: Trivy 0.69.x applies ignore-unfixed to OS-package findings
+# with status 'will_not_fix' or 'fix_deferred'. Node-pkg (npm) findings with
+# status 'affected' and an empty FixedVersion are NOT suppressed by this flag —
+# they require explicit entries in .trivyignore (see below).
 ignore-unfixed: true
 
 # Documented exceptions: see .trivyignore for CVE IDs, rationale, and

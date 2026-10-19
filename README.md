@@ -157,6 +157,8 @@ The policy is enforced **identically** in both workflows via `.trivy.yaml`, whic
 
 **Rationale for `--ignore-unfixed`:** base images and npm tooling frequently carry unfixed CVEs with no available remediation. Blocking on these would prevent publishing otherwise-clean services. This is a documented trade-off, not silent suppression.
 
+**Scope of `ignore-unfixed`:** In Trivy 0.69.x this flag suppresses OS-package CVEs with status `will_not_fix` or `fix_deferred`. Node.js (npm) findings with status `affected` and no fixed version are **not** suppressed by this flag and must be handled via explicit `.trivyignore` entries.
+
 **`skip-dirs` is not used for image scans** in either workflow. Excluding system library paths (`/usr/local/lib`, `/usr/lib`) hides OS package vulnerabilities and creates a false sense of security.
 
 ### Exceptions
