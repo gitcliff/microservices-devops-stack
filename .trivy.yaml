@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared Trivy vulnerability-scan policy
+#
+# Referenced by both pr-validation.yml (docker-build, trivy-fs jobs) and
+# build-publish.yml (build-scan-sbom job) via the `trivy-config` action input.
+#
+# Per-step inputs in the workflow (scan-type, format, exit-code, scanners,
+# skip-dirs) take precedence over values in this file and must remain there
+# because they vary by scan purpose. This file governs only the shared
+# vulnerability policy: what severities to report and which CVEs are excepted.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Vulnerability policy: block on HIGH and CRITICAL findings.
+# MEDIUM and below are allowed.
+severity:
+  - HIGH
+  - CRITICAL
+
+# Allow CVEs that have no fix available in the current package ecosystem.
+# Base images and npm tooling frequently carry unfixed CVEs with no upstream
+# remediation path. Blocking on them prevents publishing otherwise-clean images.
+# This is a documented trade-off, not silent suppression. See README.md.
+ignore-unfixed: true
+
+# Documented exceptions: see .trivyignore for CVE IDs, rationale, and
+# review dates. Never add entries merely to silence CI.
+ignorefile: .trivyignore
