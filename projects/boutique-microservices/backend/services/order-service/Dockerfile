@@ -13,7 +13,7 @@ RUN apk upgrade --no-cache \
 
 # 2. Install production dependencies cleanly using npm ci
 COPY services/order-service/package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 # 3. Copy application source
 COPY services/order-service/src ./src

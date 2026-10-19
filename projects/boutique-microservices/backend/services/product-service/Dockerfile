@@ -7,7 +7,7 @@ WORKDIR /backend
 
 # Copy only what is needed for installing dependencies
 COPY services/product-service/package*.json ./services/product-service/
-RUN npm ci --prefix ./services/product-service
+RUN npm ci --prefix ./services/product-service --ignore-scripts
 
 # Symlink so shared/ can resolve deps from the service's node_modules
 RUN ln -s /backend/services/product-service/node_modules /backend/node_modules
@@ -35,7 +35,7 @@ RUN apk upgrade --no-cache \
 
 # 2. Install production dependencies cleanly using npm ci
 COPY services/product-service/package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 # 3. Copy built artifacts from the builder stage
 COPY --from=builder /backend/services/product-service/dist ./dist
