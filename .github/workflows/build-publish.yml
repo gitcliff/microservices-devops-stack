@@ -140,30 +140,20 @@ jobs:
           if-no-files-found: error
 
       # ── VULNERABILITY GATE ───────────────────────────────────
-      # Policy: block publication when HIGH or CRITICAL findings are
-      # present in OS packages or application dependencies.
+      # Policy (severity HIGH/CRITICAL, ignore-unfixed, ignorefile) is
+      # defined in .trivy.yaml and shared with pr-validation.yml so
+      # both gates enforce identical rules. See .trivy.yaml for rationale.
       #
-      # --ignore-unfixed mirrors the PR validation policy: unfixed CVEs
-      # exist in many base images and blocking on them prevents
-      # publishing otherwise-clean images. This is a documented
-      # trade-off, not a silent suppression.
-      #
-      # Exceptions are recorded in .trivyignore at the repo root.
-      # Each entry must document: CVE ID, affected scope, rationale,
-      # owner, and a review date.
-      #
-      # skip-dirs is intentionally omitted. Excluding system library
-      # paths hides relevant packages and masks real risk.
+      # skip-dirs is intentionally absent. Excluding system library
+      # paths hides relevant OS packages and masks real risk.
       - name: Scan image for vulnerabilities (HIGH/CRITICAL gate)
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
           scan-type: image
           image-ref: "${{ matrix.image }}:${{ env.IMAGE_TAG }}"
           format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
           scanners: vuln,secret
-          trivyignores: .trivyignore
+          trivy-config: .trivy.yaml
           exit-code: "1"
 
       # ── PRESERVE SCANNED IMAGE ───────────────────────────────
@@ -240,7 +230,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Load image from archive
@@ -251,8 +241,10 @@ jobs:
       # version tags at a glance.
       - name: Tag and push SHA image
         id: push-sha
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          REMOTE="${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ env.IMAGE_TAG }}"
+          REMOTE="${DOCKERHUB_USERNAME}/${{ matrix.image }}:${{ env.IMAGE_TAG }}"
           docker tag "${{ matrix.image }}:${{ env.IMAGE_TAG }}" "$REMOTE"
           docker push "$REMOTE"
 
@@ -274,8 +266,10 @@ jobs:
       # identifier in production — it is a mutable tag.
       - name: Tag and push 'main' moving alias
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
-          ALIAS="${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.image }}:main"
+          ALIAS="${DOCKERHUB_USERNAME}/${{ matrix.image }}:main"
           docker tag "${{ matrix.image }}:${{ env.IMAGE_TAG }}" "$ALIAS"
           docker push "$ALIAS"
 

@@ -44,3 +44,19 @@ CVE-2026-33671
 #
 # sigstore (v3.1.0) — npm-internal provenance client; unauthorised cert acceptance. Fixed in 4.1.1.
 CVE-2026-48815
+#
+# http-cache-semantics (v4.2.0) — npm-internal HTTP cache policy library.
+# Not present in any service package-lock.json; confirmed npm-internal via lock-file inspection.
+# Information disclosure via max-stale Cache-Control directive. No fixed version available.
+CVE-2026-93748
+
+# ── Application dependency overrides — all backend services ──────────────────
+#
+# braces v3.0.3 — pinned via npm "overrides" in all six backend service package.json
+# files. The pin to 3.0.3 was itself a prior security fix (addressed an earlier braces
+# DoS); removing it would reintroduce the vulnerability it fixed.
+# CVE-2026-93687: DoS via stack overflow from deeply nested glob patterns.
+# No fixed version available. Not directly reachable — no user-controlled glob
+# pattern execution in these microservices' production code paths.
+# Owner: repo maintainer | Review: 2027-04
+CVE-2026-93687

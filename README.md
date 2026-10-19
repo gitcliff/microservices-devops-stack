@@ -148,12 +148,18 @@ Digests for each run are recorded in the workflow summary and as downloadable ar
 
 | Severity         | Fixed            | Action                     |
 | ---------------- | ---------------- | -------------------------- |
-| CRITICAL         | Available        | Block publish              |
-| HIGH             | Available        | Block publish              |
+| CRITICAL         | Available        | Block merge and publish    |
+| HIGH             | Available        | Block merge and publish    |
 | CRITICAL / HIGH  | No fix available | Allowed (--ignore-unfixed) |
 | MEDIUM and below | Any              | Allowed                    |
 
+The policy is enforced **identically** in both workflows via `.trivy.yaml`, which is the single source of truth for severity level, `ignore-unfixed`, and the ignorefile path. Both the PR image scan (`docker-build` job) and the publish vulnerability gate (`build-scan-sbom` job) reference this file, ensuring a finding that blocks publishing is also caught before merge.
+
 **Rationale for `--ignore-unfixed`:** base images and npm tooling frequently carry unfixed CVEs with no available remediation. Blocking on these would prevent publishing otherwise-clean services. This is a documented trade-off, not silent suppression.
+
+**Scope of `ignore-unfixed`:** In Trivy 0.69.x this flag suppresses OS-package CVEs with status `will_not_fix` or `fix_deferred`. Node.js (npm) findings with status `affected` and no fixed version are **not** suppressed by this flag and must be handled via explicit `.trivyignore` entries.
+
+**`skip-dirs` is not used for image scans** in either workflow. Excluding system library paths (`/usr/local/lib`, `/usr/lib`) hides OS package vulnerabilities and creates a false sense of security.
 
 ### Exceptions
 
@@ -198,23 +204,16 @@ GitHub Actions run → Artifacts → sbom-boutique-<service>
 
 You must configure the following in your GitHub repository settings before the workflow can publish:
 
-### 1. Repository Variable
+### 1. Repository Secrets
 
-`Settings → Secrets and variables → Actions → Variables → New repository variable`
+`Settings → Secrets and variables → Actions → Secrets → New repository secret`
 
 | Name                 | Value                                    |
 | -------------------- | ---------------------------------------- |
 | `DOCKERHUB_USERNAME` | Your Docker Hub username or organisation |
+| `DOCKERHUB_TOKEN`    | A Docker Hub Personal Access Token       |
 
-Variables are not secrets — they appear in logs and can be referenced in expressions safely.
-
-### 2. Repository Secret
-
-`Settings → Secrets and variables → Actions → Secrets → New repository secret`
-
-| Name              | Value                              |
-| ----------------- | ---------------------------------- |
-| `DOCKERHUB_TOKEN` | A Docker Hub Personal Access Token |
+Both are stored as secrets so they do not appear in workflow logs or in expression expansions visible to untrusted code.
 
 **Create the PAT on Docker Hub:** Account Settings → Security → New Access Token.
 

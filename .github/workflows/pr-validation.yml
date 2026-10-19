@@ -144,11 +144,11 @@ jobs:
           scan-type: fs
           scan-ref: .
           format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
           scanners: vuln,secret,config
+          # node_modules are not in built images; excluding avoids noise on
+          # dev-only packages. System paths are host OS, not source code.
           skip-dirs: "**/node_modules,/usr/local/lib/**,/usr/lib/**"
-          trivyignores: .trivyignore
+          trivy-config: .trivy.yaml
           exit-code: "1"
 
   docker-build:
@@ -193,16 +193,18 @@ jobs:
           "${{ matrix.context }}"
 
       - name: Scan image for OS and dependency CVEs
+        # Policy (severity, ignore-unfixed, ignorefile) is shared via .trivy.yaml
+        # to stay consistent with build-publish.yml's vulnerability gate.
+        # skip-dirs is intentionally absent: excluding system library paths
+        # hides relevant OS packages and masks real risk (mirrors publish policy).
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
           scan-type: image
           image-ref: boutique-${{ matrix.image }}:pr
           format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          trivyignores: .trivyignore
+          scanners: vuln,secret
+          trivy-config: .trivy.yaml
           exit-code: "1"
-          skip-dirs: "/usr/local/lib/**,/usr/lib/**"
 
   # ============================================================
   # 3. INTEGRATION SMOKE TESTS
@@ -256,7 +258,7 @@ jobs:
         run: |
           out=$(curl -sf -X POST http://localhost:3002/login \
             -H 'Content-Type: application/json' \
-            -d '{"email":"ci@test.com","password":"demo"}')
+            -d '{"email":"ci@test.com","password":"ci-pass-123"}')
           echo "$out"
           echo "$out" | grep -q '"token"'
 
