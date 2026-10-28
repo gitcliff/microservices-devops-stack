@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: boutique-config
+  namespace: boutique
+data:
+  NODE_ENV: "production"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_USER: "postgres"
+  CORS_ORIGINS: "http://boutique.local,http://localhost"
+  AUTH_SERVICE_URL: "http://auth:3002"
+  PRODUCTS_SERVICE_URL: "http://product-service:3003"
+  ORDERS_SERVICE_URL: "http://order-service:3004"
+  USERS_SERVICE_URL: "http://user-service:3006"

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+  namespace: boutique
+spec:
+  selector:
+    app: product-service
+  ports:
+    - port: 3003
+      targetPort: 3003
