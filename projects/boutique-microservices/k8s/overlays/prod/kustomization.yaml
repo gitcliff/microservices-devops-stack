@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../
+  - secrets.yaml
+
+commonLabels:
+  environment: prod
+
+images:
+  - name: boutique/auth
+    newTag: "1.0.0"
+  - name: boutique/product-service
+    newTag: "1.0.0"
+  - name: boutique/order-service
+    newTag: "1.0.0"
+  - name: boutique/orders
+    newTag: "1.0.0"
+  - name: boutique/user-service
+    newTag: "1.0.0"
+  - name: boutique/gateway
+    newTag: "1.0.0"
+  - name: boutique/frontend
+    newTag: "1.0.0"
+
+patches:
+  - path: patches/image-pull-policy.yaml
+    target:
+      kind: Deployment
+  - path: patches/replicas.yaml
+  - path: patches/ingress.yaml
