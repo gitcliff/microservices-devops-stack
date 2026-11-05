@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: gateway
-  namespace: boutique
 spec:
   replicas: 1
   selector:
@@ -23,7 +22,6 @@ spec:
       containers:
         - name: gateway
           image: boutique/gateway:latest
-          imagePullPolicy: Never
           ports:
             - containerPort: 3001
           env:
@@ -76,3 +74,14 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "300m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  selector:
+    app: gateway
+  ports:
+    - port: 3001
+      targetPort: 3001

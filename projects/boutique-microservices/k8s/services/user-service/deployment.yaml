@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: user-service
-  namespace: boutique
 spec:
   replicas: 1
   selector:
@@ -20,7 +19,6 @@ spec:
       containers:
         - name: user-service
           image: boutique/user-service:latest
-          imagePullPolicy: Never
           ports:
             - containerPort: 3006
           env:
@@ -70,3 +68,14 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+spec:
+  selector:
+    app: user-service
+  ports:
+    - port: 3006
+      targetPort: 3006

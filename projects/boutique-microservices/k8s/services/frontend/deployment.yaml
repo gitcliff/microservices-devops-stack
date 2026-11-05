@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
-  namespace: boutique
 spec:
   replicas: 1
   selector:
@@ -20,7 +19,6 @@ spec:
       containers:
         - name: frontend
           image: boutique/frontend:latest
-          imagePullPolicy: Never
           ports:
             - containerPort: 3000
           env:
@@ -48,3 +46,14 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "100m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  selector:
+    app: frontend
+  ports:
+    - port: 3000
+      targetPort: 3000

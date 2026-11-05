@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: product-service
-  namespace: boutique
 spec:
   replicas: 1
   selector:
@@ -20,7 +19,6 @@ spec:
       containers:
         - name: product-service
           image: boutique/product-service:latest
-          imagePullPolicy: Never
           ports:
             - containerPort: 3003
           env:
@@ -60,3 +58,14 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+spec:
+  selector:
+    app: product-service
+  ports:
+    - port: 3003
+      targetPort: 3003
