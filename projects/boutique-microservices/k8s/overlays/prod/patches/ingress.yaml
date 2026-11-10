@@ -21,23 +21,3 @@ spec:
                 name: frontend
                 port:
                   number: 3000
-    - host: grafana.boutique.example.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: grafana
-                port:
-                  number: 3000
-    - host: prometheus.boutique.example.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: prometheus
-                port:
-                  number: 9090

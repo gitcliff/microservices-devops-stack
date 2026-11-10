@@ -1,0 +1,37 @@
+# Dev environment overrides for kube-prometheus-stack
+# Use with: helm install -f monitoring-base.yaml -f monitoring-dev.yaml
+
+prometheus:
+  prometheusSpec:
+    replicas: 1
+    retention: 2d
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+
+grafana:
+  replicas: 1
+  adminPassword: admin
+  persistence:
+    size: 2Gi
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 50m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+
+alertmanager:
+  enabled: false

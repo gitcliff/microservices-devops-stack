@@ -1,0 +1,58 @@
+# Shared base values for kube-prometheus-stack
+# Environment-specific overrides in monitoring-dev.yaml / monitoring-prod.yaml
+
+namespaceOverride: monitoring
+
+# --- Prometheus ---
+prometheus:
+  prometheusSpec:
+    additionalScrapeConfigs:
+      - job_name: "gateway"
+        metrics_path: /metrics
+        scrape_interval: 15s
+        static_configs:
+          - targets: ["gateway.boutique.svc.cluster.local:3001"]
+      - job_name: "auth"
+        metrics_path: /metrics
+        scrape_interval: 15s
+        static_configs:
+          - targets: ["auth.boutique.svc.cluster.local:3002"]
+      - job_name: "product-service"
+        metrics_path: /metrics
+        scrape_interval: 15s
+        static_configs:
+          - targets: ["product-service.boutique.svc.cluster.local:3003"]
+      - job_name: "order-service"
+        metrics_path: /metrics
+        scrape_interval: 15s
+        static_configs:
+          - targets: ["order-service.boutique.svc.cluster.local:3004"]
+      - job_name: "orders"
+        metrics_path: /metrics
+        scrape_interval: 15s
+        static_configs:
+          - targets: ["orders.boutique.svc.cluster.local:3005"]
+      - job_name: "user-service"
+        metrics_path: /metrics
+        scrape_interval: 15s
+        static_configs:
+          - targets: ["user-service.boutique.svc.cluster.local:3006"]
+
+# --- Grafana ---
+grafana:
+  enabled: true
+  persistence:
+    enabled: true
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+          access: proxy
+          isDefault: true
+
+# --- Disable unused components ---
+thanosRuler:
+  enabled: false
