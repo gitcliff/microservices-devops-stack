@@ -1,0 +1,86 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/part-of: boutique
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 65.1.0
+    helm:
+      valueFiles: []
+      values: |
+        # --- Namespace ---
+        namespaceOverride: monitoring
+
+        # --- Prometheus ---
+        prometheus:
+          prometheusSpec:
+            retention: 7d
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 10Gi
+            additionalScrapeConfigs:
+              - job_name: "gateway"
+                static_configs:
+                  - targets: ["gateway.boutique.svc.cluster.local:3001"]
+              - job_name: "auth"
+                static_configs:
+                  - targets: ["auth.boutique.svc.cluster.local:3002"]
+              - job_name: "product-service"
+                static_configs:
+                  - targets: ["product-service.boutique.svc.cluster.local:3003"]
+              - job_name: "order-service"
+                static_configs:
+                  - targets: ["order-service.boutique.svc.cluster.local:3004"]
+              - job_name: "orders"
+                static_configs:
+                  - targets: ["orders.boutique.svc.cluster.local:3005"]
+              - job_name: "user-service"
+                static_configs:
+                  - targets: ["user-service.boutique.svc.cluster.local:3006"]
+
+        # --- Grafana ---
+        grafana:
+          enabled: true
+          adminPassword: admin
+          persistence:
+            enabled: true
+            size: 2Gi
+          datasources:
+            datasources.yaml:
+              apiVersion: 1
+              datasources:
+                - name: Prometheus
+                  type: prometheus
+                  url: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+                  access: proxy
+                  isDefault: true
+
+        # --- Alertmanager ---
+        alertmanager:
+          enabled: true
+
+        # --- Disable unused components ---
+        thanosRuler:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
