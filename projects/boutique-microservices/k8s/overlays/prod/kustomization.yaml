@@ -2,8 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../../
-  - secrets.yaml
+  - ../../base
 
 commonLabels:
   environment: prod
@@ -25,6 +24,7 @@ images:
     newTag: "1.0.0"
 
 patches:
+  - path: secrets.yaml
   - path: patches/image-pull-policy.yaml
     target:
       kind: Deployment
