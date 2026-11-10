@@ -12,7 +12,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/gitcliff/microservices-devops-stack.git
-    targetRevision: HEAD
+    targetRevision: main
     path: projects/boutique-microservices/k8s/overlays/dev
   destination:
     server: https://kubernetes.default.svc
