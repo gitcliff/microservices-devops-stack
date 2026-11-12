@@ -56,9 +56,9 @@ jobs:
       matrix:
         include:
           - project: frontend
-            dir: projects/boutique-microservices/frontend
+            dir: frontend
           - project: backend
-            dir: projects/boutique-microservices/backend
+            dir: backend
 
     steps:
       - name: Checkout
@@ -80,7 +80,7 @@ jobs:
       - name: Check JavaScript syntax (plain .js files not compiled by tsc)
         if: ${{ matrix.project == 'backend' }}
         run: |
-          find projects/boutique-microservices/backend/services \
+          find backend/services \
             -name "*.js" \
             ! -path "*/node_modules/*" \
             ! -path "*/dist/*" \
@@ -100,9 +100,9 @@ jobs:
       matrix:
         include:
           - project: frontend
-            dir: projects/boutique-microservices/frontend
+            dir: frontend
           - project: backend
-            dir: projects/boutique-microservices/backend
+            dir: backend
 
     steps:
       - name: Checkout
@@ -160,26 +160,26 @@ jobs:
       matrix:
         include:
           - image: frontend
-            context: projects/boutique-microservices/frontend
-            dockerfile: projects/boutique-microservices/frontend/Dockerfile
+            context: frontend
+            dockerfile: frontend/Dockerfile
           - image: gateway
-            context: projects/boutique-microservices/backend
-            dockerfile: projects/boutique-microservices/backend/services/gateway/Dockerfile
+            context: backend
+            dockerfile: backend/services/gateway/Dockerfile
           - image: auth
-            context: projects/boutique-microservices/backend
-            dockerfile: projects/boutique-microservices/backend/services/auth/Dockerfile
+            context: backend
+            dockerfile: backend/services/auth/Dockerfile
           - image: product-service
-            context: projects/boutique-microservices/backend
-            dockerfile: projects/boutique-microservices/backend/services/product-service/Dockerfile
+            context: backend
+            dockerfile: backend/services/product-service/Dockerfile
           - image: order-service
-            context: projects/boutique-microservices/backend
-            dockerfile: projects/boutique-microservices/backend/services/order-service/Dockerfile
+            context: backend
+            dockerfile: backend/services/order-service/Dockerfile
           - image: orders
-            context: projects/boutique-microservices/backend
-            dockerfile: projects/boutique-microservices/backend/services/orders/Dockerfile
+            context: backend
+            dockerfile: backend/services/orders/Dockerfile
           - image: user-service
-            context: projects/boutique-microservices/backend
-            dockerfile: projects/boutique-microservices/backend/services/user-service/Dockerfile
+            context: backend
+            dockerfile: backend/services/user-service/Dockerfile
 
     steps:
       - name: Checkout
@@ -219,7 +219,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: projects/boutique-microservices
+        working-directory: .
 
     steps:
       - name: Checkout
@@ -297,13 +297,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: coverage-frontend
-          path: projects/boutique-microservices/frontend/coverage
+          path: frontend/coverage
 
       - name: Download backend coverage
         uses: actions/download-artifact@v4
         with:
           name: coverage-backend
-          path: projects/boutique-microservices/backend/coverage
+          path: backend/coverage
 
       - name: SonarQube scan
         uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2 # v7
@@ -362,21 +362,21 @@ jobs:
       matrix:
         include:
           - project: frontend
-            dir: projects/boutique-microservices/frontend
+            dir: frontend
           - project: backend
-            dir: projects/boutique-microservices/backend
+            dir: backend
           - project: gateway
-            dir: projects/boutique-microservices/backend/services/gateway
+            dir: backend/services/gateway
           - project: auth
-            dir: projects/boutique-microservices/backend/services/auth
+            dir: backend/services/auth
           - project: product-service
-            dir: projects/boutique-microservices/backend/services/product-service
+            dir: backend/services/product-service
           - project: order-service
-            dir: projects/boutique-microservices/backend/services/order-service
+            dir: backend/services/order-service
           - project: orders
-            dir: projects/boutique-microservices/backend/services/orders
+            dir: backend/services/orders
           - project: user-service
-            dir: projects/boutique-microservices/backend/services/user-service
+            dir: backend/services/user-service
 
     steps:
       - name: Checkout
