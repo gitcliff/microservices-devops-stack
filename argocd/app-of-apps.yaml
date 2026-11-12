@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/gitcliff/microservices-devops-stack.git
     targetRevision: main
-    path: projects/boutique-microservices/k8s/argocd/apps/base
+    path: argocd/apps/base
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

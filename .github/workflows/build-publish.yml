@@ -58,36 +58,36 @@ jobs:
           # ── Frontend ──────────────────────────────────────────
           # Standalone build context; no shared/ dependency.
           - image: boutique-frontend
-            context: projects/boutique-microservices/frontend
-            dockerfile: projects/boutique-microservices/frontend/Dockerfile
+            context: frontend
+            dockerfile: frontend/Dockerfile
 
           # ── Backend services ──────────────────────────────────
           # All backend services use backend/ as their build context
           # so the shared/ library is reachable from each Dockerfile.
           - image: boutique-gateway
-            context: projects/boutique-microservices/backend
-            dockerfile: projects/boutique-microservices/backend/services/gateway/Dockerfile
+            context: backend
+            dockerfile: backend/services/gateway/Dockerfile
 
           - image: boutique-auth
-            context: projects/boutique-microservices/backend
-            dockerfile: projects/boutique-microservices/backend/services/auth/Dockerfile
+            context: backend
+            dockerfile: backend/services/auth/Dockerfile
 
           - image: boutique-product-service
-            context: projects/boutique-microservices/backend
-            dockerfile: projects/boutique-microservices/backend/services/product-service/Dockerfile
+            context: backend
+            dockerfile: backend/services/product-service/Dockerfile
 
           # order-service is a plain JavaScript service (no TypeScript build).
           - image: boutique-order-service
-            context: projects/boutique-microservices/backend
-            dockerfile: projects/boutique-microservices/backend/services/order-service/Dockerfile
+            context: backend
+            dockerfile: backend/services/order-service/Dockerfile
 
           - image: boutique-orders
-            context: projects/boutique-microservices/backend
-            dockerfile: projects/boutique-microservices/backend/services/orders/Dockerfile
+            context: backend
+            dockerfile: backend/services/orders/Dockerfile
 
           - image: boutique-user-service
-            context: projects/boutique-microservices/backend
-            dockerfile: projects/boutique-microservices/backend/services/user-service/Dockerfile
+            context: backend
+            dockerfile: backend/services/user-service/Dockerfile
 
     steps:
       # Check out the trusted revision that triggered the workflow.
