@@ -78,3 +78,11 @@ frontend/build/
 # Kubernetes secrets (keep templates)
 k8s/**/*.secret.yaml
 k8s/**/secrets/
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
