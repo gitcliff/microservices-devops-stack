@@ -9,6 +9,7 @@ commonLabels:
 resources:
   - namespace.yaml
   - configmap.yaml
+  - servicemonitor-configmap.yaml
   - secrets.yaml
   - ingress.yaml
   - postgres/init-configmap.yaml

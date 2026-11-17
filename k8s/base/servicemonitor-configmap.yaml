@@ -1,0 +1,95 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: boutique-auth
+  namespace: boutique
+  labels:
+    app.kubernetes.io/part-of: boutique
+spec:
+  selector:
+    matchLabels:
+      app: auth
+  endpoints:
+    - port: "3002"
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: boutique-gateway
+  namespace: boutique
+  labels:
+    app.kubernetes.io/part-of: boutique
+spec:
+  selector:
+    matchLabels:
+      app: gateway
+  endpoints:
+    - port: "3001"
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: boutique-product-service
+  namespace: boutique
+  labels:
+    app.kubernetes.io/part-of: boutique
+spec:
+  selector:
+    matchLabels:
+      app: product-service
+  endpoints:
+    - port: "3003"
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: boutique-order-service
+  namespace: boutique
+  labels:
+    app.kubernetes.io/part-of: boutique
+spec:
+  selector:
+    matchLabels:
+      app: order-service
+  endpoints:
+    - port: "3004"
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: boutique-orders
+  namespace: boutique
+  labels:
+    app.kubernetes.io/part-of: boutique
+spec:
+  selector:
+    matchLabels:
+      app: orders
+  endpoints:
+    - port: "3005"
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: boutique-user-service
+  namespace: boutique
+  labels:
+    app.kubernetes.io/part-of: boutique
+spec:
+  selector:
+    matchLabels:
+      app: user-service
+  endpoints:
+    - port: "3006"
+      path: /metrics
+      interval: 30s

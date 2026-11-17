@@ -67,12 +67,15 @@
     "postcss": "8.5.18",
     "postcss-selector-parser": "7.1.6",
     "underscore": "1.13.8",
-    "webpack-dev-server": "6.0.0",
+    "webpack-dev-server": "6.1.0",
     "selfsigned": "5.5.0",
     "braces": "3.0.3",
     "micromatch": "4.0.8",
     "node-forge": "1.4.0",
-    "source-map-js": "1.2.2"
+    "source-map-js": "1.2.2",
+    "open": "11.0.0",
+    "body-parser": "2.4.0",
+    "follow-redirects": "1.16.2"
   },
   "engines": {
     "node": ">=20.0.0"
