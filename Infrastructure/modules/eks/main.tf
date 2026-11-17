@@ -28,14 +28,32 @@ resource "aws_eks_cluster" "eks" {
   version  = "1.31"
 
   vpc_config {
-    subnet_ids = var.subnet_ids
-    endpoint_public_access  = true
+    subnet_ids              = var.subnet_ids
+    endpoint_public_access  = false
     endpoint_private_access = true
+  }
+
+  encryption_config {
+    resources = ["secrets"]
+    provider {
+      key_arn = aws_kms_key.eks_secrets.arn
+    }
   }
 
   depends_on = [
     aws_iam_role_policy_attachment.cluster_policy
   ]
+}
+
+resource "aws_kms_key" "eks_secrets" {
+  description             = "KMS key for EKS secrets encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+}
+
+resource "aws_kms_alias" "eks_secrets" {
+  name          = "alias/${var.cluster_name}-eks-secrets"
+  target_key_id = aws_kms_key.eks_secrets.key_id
 }
 
 data "tls_certificate" "eks" {
