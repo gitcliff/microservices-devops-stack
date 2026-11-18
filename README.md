@@ -1,4 +1,4 @@
-# Boutique Microservices — DevOps Stack
+# End 2 End Microservices — DevOps Stack
 
 A portfolio-grade microservices e-commerce application with a production-minded CI/CD pipeline featuring automated container builds, vulnerability scanning, SBOM generation, and Docker Hub publishing.
 
