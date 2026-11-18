@@ -23,6 +23,8 @@ spec:
         prometheus:
           prometheusSpec:
             retention: 7d
+            serviceMonitorNamespaceSelector: {}
+            serviceMonitorSelector: {}
             storageSpec:
               volumeClaimTemplate:
                 spec:
@@ -54,6 +56,10 @@ spec:
         grafana:
           enabled: true
           adminPassword: admin
+          sidecar:
+            dashboards:
+              enabled: true
+              searchNamespace: ALL
           persistence:
             enabled: true
             size: 2Gi
