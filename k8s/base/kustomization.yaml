@@ -10,6 +10,7 @@ resources:
   - namespace.yaml
   - configmap.yaml
   - servicemonitor-configmap.yaml
+  # - grafana-dashboard.yaml
   - secrets.yaml
   - ingress.yaml
   - postgres/init-configmap.yaml
