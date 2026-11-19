@@ -30,6 +30,8 @@ module "ecr" {
   source = "./modules/ecr"
 
   repositories = var.repositories
+  github_org   = var.github_org
+  github_repo  = var.github_repo
 }
 
 # --- Kubernetes / Helm auth for in-cluster modules ---

@@ -7,21 +7,33 @@ resources:
 commonLabels:
   environment: prod
 
+# Prod images are promoted from dev by updating the digests below.
+# Use `kustomize edit set image` or copy digests from the dev overlay
+# after validating in the dev environment.
+#
+# Format: <ECR_REGISTRY>/<repo>@sha256:<hash>
 images:
   - name: boutique/auth
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/auth
+    digest: sha256:PENDING
   - name: boutique/product-service
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/product-service
+    digest: sha256:PENDING
   - name: boutique/order-service
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/order-service
+    digest: sha256:PENDING
   - name: boutique/orders
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/orders
+    digest: sha256:PENDING
   - name: boutique/user-service
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/user-service
+    digest: sha256:PENDING
   - name: boutique/gateway
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/gateway
+    digest: sha256:PENDING
   - name: boutique/frontend
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/frontend
+    digest: sha256:PENDING
 
 patches:
   - path: secrets.yaml

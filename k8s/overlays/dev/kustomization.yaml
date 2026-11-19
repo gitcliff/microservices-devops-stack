@@ -7,6 +7,11 @@ resources:
 commonLabels:
   environment: dev
 
+# Image references are managed by the CI pipeline (build-publish.yml).
+# `kustomize edit set image` updates this block with ECR URIs and
+# immutable sha256 digests after each successful publish.
+images: []
+
 patches:
   - path: patches/image-pull-policy.yaml
     target:

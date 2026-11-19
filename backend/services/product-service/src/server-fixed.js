@@ -34,6 +34,9 @@ app.get('/products', async (req, res) => {
       maxPrice
     } = req.query;
 
+    const allowedSortColumns = ['created_at', 'updated_at', 'name', 'price', 'category'];
+    const safeSortBy = allowedSortColumns.includes(sortBy) ? sortBy : 'created_at';
+
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const offset = (pageNum - 1) * limitNum;
@@ -65,7 +68,7 @@ app.get('/products', async (req, res) => {
     const productsQuery = `
       SELECT * FROM products 
       ${whereClause}
-      ORDER BY ${sortBy}
+      ORDER BY ${safeSortBy}
       LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
     `;
     queryParams.push(limitNum, offset);
