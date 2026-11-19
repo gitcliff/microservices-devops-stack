@@ -22,11 +22,9 @@ concurrency:
   group: build-publish-${{ github.ref }}
   cancel-in-progress: false
 
-# The update-manifests job needs contents: write to commit digest updates.
-# The publish job needs id-token: write for OIDC-based ECR authentication.
+# Grant elevated permissions only to the jobs that need them.
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 env:
   # Full 40-character SHA with prefix — unique, unambiguous, and directly
