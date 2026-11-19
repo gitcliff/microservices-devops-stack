@@ -7,9 +7,11 @@ resources:
 commonLabels:
   environment: prod
 
-# Images are pinned by digest (sha256:...) for immutable, content-addressed
-# deployments. The CI pipeline (build-publish.yml) automatically updates
-# newName and digest after each successful publish to ECR.
+# Prod images are promoted from dev by updating the digests below.
+# Use `kustomize edit set image` or copy digests from the dev overlay
+# after validating in the dev environment.
+#
+# Format: <ECR_REGISTRY>/<repo>@sha256:<hash>
 images:
   - name: boutique/auth
     newName: PENDING_ECR_REGISTRY/auth

@@ -186,7 +186,7 @@ jobs:
           if-no-files-found: error
 
   # ============================================================
-  # 2. PUBLISH
+  # 2. PUBLISH TO AMAZON ECR & CAPTURE IMAGE DIGESTS
   #
   # Downloads the exact image archive that passed the scan gate
   # and pushes it to Amazon ECR. AWS credentials are obtained via
@@ -207,7 +207,7 @@ jobs:
 
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 4
       matrix:
         # Mirror the image list from build-scan-sbom exactly so artifact
         # names match between the upload and download steps.
@@ -230,44 +230,42 @@ jobs:
     steps:
       # No code checkout needed — this job works exclusively with
       # the pre-built, pre-scanned archive from build-scan-sbom.
-      - name: Download image archive
+      - name: Download scanned image archive
         uses: actions/download-artifact@v4
         with:
           name: "image-${{ matrix.image }}"
           path: /tmp/docker-images
+
+      - name: Load image into local Docker daemon
+        run: docker load -i "/tmp/docker-images/${{ matrix.image }}.tar"
 
       # Authenticate to AWS via OIDC. The GitHub Actions OIDC provider
       # issues a short-lived token that is exchanged for temporary AWS
       # credentials scoped to the ECR push role.
       #
       # Required configuration (GitHub repo Settings):
-      #   Secrets → Actions:
-      #     AWS_ROLE_TO_ASSUME  (IAM role ARN from Terraform output)
-      #     AWS_REGION          (e.g. us-east-1)
-      #     AWS_ACCOUNT_ID      (12-digit AWS account ID)
+      #   Secrets  → Actions:  AWS_ROLE_ARN  (IAM role ARN from Terraform output)
+      #   Variables → Actions:  AWS_REGION    (e.g. us-east-1)
       #
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@7290e214a610b32bc0eef81748948b6d466a8783 # v2
 
-      - name: Load image from archive
-        run: docker load --input "/tmp/docker-images/${{ matrix.image }}.tar"
-
       # Tag with the immutable SHA-based tag and push to ECR.
       # After push, capture the image digest (sha256:...) which is the
       # content-addressed, truly immutable identifier used for deployments.
-      - name: Tag and push image to ECR
+      - name: Push image to ECR and capture digest
         id: push
         env:
-          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
-          REMOTE="${ECR_REGISTRY}/${{ matrix.ecr_name }}:${{ env.IMAGE_TAG }}"
+          REMOTE="${REGISTRY}/${{ matrix.ecr_name }}:${{ env.IMAGE_TAG }}"
           docker tag "${{ matrix.image }}:${{ env.IMAGE_TAG }}" "$REMOTE"
           docker push "$REMOTE"
 
@@ -275,34 +273,37 @@ jobs:
           # RepoDigests is populated by Docker after a successful push.
           # The digest is a content-addressed sha256 hash — unlike tags,
           # it cannot be overwritten or reassigned.
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$REMOTE" 2>/dev/null \
-                   | cut -d@ -f2 || echo "digest-unavailable")
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$REMOTE" \
+                   | cut -d@ -f2)
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-          echo "remote=${REMOTE}" >> "$GITHUB_OUTPUT"
 
+      # Write a one-line record: <ecr_name> <sha256:hash>
+      # Uploaded as an artifact so the update-manifests job can collect
+      # digests from all matrix entries reliably.
       - name: Record image digest
         run: |
           mkdir -p /tmp/digests
           printf '%s %s\n' "${{ matrix.ecr_name }}" "${{ steps.push.outputs.digest }}" \
-            > "/tmp/digests/${{ matrix.image }}.txt"
+            > "/tmp/digests/${{ matrix.ecr_name }}.txt"
 
       - name: Upload digest record
         uses: actions/upload-artifact@v4
         with:
-          name: "digest-${{ matrix.image }}"
-          path: "/tmp/digests/${{ matrix.image }}.txt"
+          name: "digest-${{ matrix.ecr_name }}"
+          path: "/tmp/digests/${{ matrix.ecr_name }}.txt"
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
 
   # ============================================================
-  # 3. UPDATE MANIFESTS
+  # 3. UPDATE KUSTOMIZATION WITH REGISTRY & IMMUTABLE DIGESTS
   #
-  # Collects per-service digests, updates the Kustomize overlay
-  # files with the ECR image URIs and digests, then commits and
-  # pushes the changes back to main. ArgoCD detects the commit
-  # and reconciles the cluster state automatically.
+  # Collects per-service digests, uses `kustomize edit set image`
+  # to update the dev overlay with ECR URIs and digests, then
+  # commits and pushes. ArgoCD detects the commit and reconciles
+  # the cluster state automatically.
   #
-  # This job runs only when ALL publish matrix entries succeed.
+  # Only dev is updated automatically. Promote to prod by copying
+  # the digest values or running a separate promotion workflow.
   # ============================================================
   update-manifests:
     name: Update K8s Manifests
@@ -326,48 +327,41 @@ jobs:
           path: /tmp/digests
           merge-multiple: true
 
-      - name: Update kustomization overlays with ECR digests
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@2ba527d4d7d0b3d12f7f4c5ba8932a8c9c9ed3d7 # v2.1.0
+
+      - name: Update dev overlay with ECR image digests
         env:
-          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          REGISTRY: ${{ format('{0}.dkr.ecr.{1}.amazonaws.com', secrets.AWS_ACCOUNT_ID, vars.AWS_REGION) }}
         run: |
-          # Build a sed script from the digest records.
-          # Each digest file contains: <ecr_name> <sha256:hash>
-          for overlay in k8s/overlays/dev/kustomization.yaml k8s/overlays/prod/kustomization.yaml; do
-            for f in /tmp/digests/*.txt; do
-              [ -f "$f" ] || continue
-              repo=$(awk '{print $1}' "$f")
-              digest=$(awk '{print $2}' "$f")
+          cd k8s/overlays/dev
+          for f in /tmp/digests/*.txt; do
+            [ -f "$f" ] || continue
+            repo=$(awk '{print $1}' "$f")
+            digest=$(awk '{print $2}' "$f")
 
-              if [ -z "$repo" ] || [ -z "$digest" ]; then
-                echo "::warning::Skipping malformed digest record: $f"
-                continue
-              fi
+            if [ -z "$repo" ] || [ -z "$digest" ]; then
+              echo "::warning::Skipping malformed digest record: $f"
+              continue
+            fi
 
-              # Update newName to the full ECR URI
-              # Update digest to the value from the push
-              # Uses yq-style sed: match the block for each service by its newName pattern
-              # and replace the digest line that follows.
-              sed -i \
-                -e "s|newName: .*/${repo}$|newName: ${ECR_REGISTRY}/${repo}|" \
-                -e "/newName: ${ECR_REGISTRY}\/${repo}$/{ n; s|digest: .*|digest: ${digest}|; }" \
-                "$overlay"
-            done
-
-            echo "Updated: $overlay"
+            kustomize edit set image \
+              "boutique/${repo}=${REGISTRY}/${repo}@${digest}"
+            echo "  ✓ ${repo} → ${digest}"
           done
 
-      - name: Commit and push updated manifests
+      - name: Commit and push manifest update
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add k8s/overlays/dev/kustomization.yaml k8s/overlays/prod/kustomization.yaml
+          git add k8s/overlays/dev/kustomization.yaml
 
           # Only commit if there are actual changes.
           if git diff --cached --quiet; then
             echo "No manifest changes to commit."
           else
-            git commit -m "chore: update image digests for ${{ env.IMAGE_TAG }}
+            git commit -m "chore(release): bump dev images to ${{ env.IMAGE_TAG }}
 
           Automated by Build, Scan & Publish workflow.
           Source commit: ${{ github.sha }}"
@@ -399,8 +393,6 @@ jobs:
         continue-on-error: true
 
       - name: Write workflow summary
-        env:
-          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
         run: |
           {
             echo "## Boutique Build & Publish Summary"
@@ -409,7 +401,6 @@ jobs:
             echo "|-------|-------|"
             echo "| Commit  | \`${{ github.sha }}\` |"
             echo "| Tag     | \`${{ env.IMAGE_TAG }}\` |"
-            echo "| Registry | \`${ECR_REGISTRY}\` |"
             echo "| Trigger | \`${{ github.event_name }}\` |"
             echo "| Actor   | \`${{ github.actor }}\` |"
             echo ""

@@ -7,31 +7,10 @@ resources:
 commonLabels:
   environment: dev
 
-# Pull the same CI-built images from ECR (build once, deploy many).
-# The CI pipeline (build-publish.yml) automatically updates
-# newName and digest after each successful publish to ECR.
-images:
-  - name: boutique/auth
-    newName: PENDING_ECR_REGISTRY/auth
-    digest: sha256:PENDING
-  - name: boutique/product-service
-    newName: PENDING_ECR_REGISTRY/product-service
-    digest: sha256:PENDING
-  - name: boutique/order-service
-    newName: PENDING_ECR_REGISTRY/order-service
-    digest: sha256:PENDING
-  - name: boutique/orders
-    newName: PENDING_ECR_REGISTRY/orders
-    digest: sha256:PENDING
-  - name: boutique/user-service
-    newName: PENDING_ECR_REGISTRY/user-service
-    digest: sha256:PENDING
-  - name: boutique/gateway
-    newName: PENDING_ECR_REGISTRY/gateway
-    digest: sha256:PENDING
-  - name: boutique/frontend
-    newName: PENDING_ECR_REGISTRY/frontend
-    digest: sha256:PENDING
+# Image references are managed by the CI pipeline (build-publish.yml).
+# `kustomize edit set image` updates this block with ECR URIs and
+# immutable sha256 digests after each successful publish.
+images: []
 
 patches:
   - path: patches/image-pull-policy.yaml
