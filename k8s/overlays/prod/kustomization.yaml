@@ -7,21 +7,31 @@ resources:
 commonLabels:
   environment: prod
 
+# Images are pinned by digest (sha256:...) for immutable, content-addressed
+# deployments. The CI pipeline (build-publish.yml) automatically updates
+# newName and digest after each successful publish to ECR.
 images:
   - name: boutique/auth
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/auth
+    digest: sha256:PENDING
   - name: boutique/product-service
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/product-service
+    digest: sha256:PENDING
   - name: boutique/order-service
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/order-service
+    digest: sha256:PENDING
   - name: boutique/orders
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/orders
+    digest: sha256:PENDING
   - name: boutique/user-service
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/user-service
+    digest: sha256:PENDING
   - name: boutique/gateway
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/gateway
+    digest: sha256:PENDING
   - name: boutique/frontend
-    newTag: "1.0.0"
+    newName: PENDING_ECR_REGISTRY/frontend
+    digest: sha256:PENDING
 
 patches:
   - path: secrets.yaml

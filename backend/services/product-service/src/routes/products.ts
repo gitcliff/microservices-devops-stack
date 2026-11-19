@@ -16,6 +16,9 @@ router.get('/', async (req, res) => {
       maxPrice
     } = req.query;
 
+    const allowedSortColumns = ['created_at', 'updated_at', 'name', 'price', 'brand', 'inventory_quantity', 'is_featured'];
+    const safeSortBy = allowedSortColumns.includes(sortBy as string) ? sortBy as string : 'created_at';
+
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
     const offset = (pageNum - 1) * limitNum;
@@ -64,7 +67,7 @@ let whereClause = 'WHERE 1=1';
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       ${whereClause}
-      ORDER BY p.${sortBy}
+      ORDER BY p.${safeSortBy}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 

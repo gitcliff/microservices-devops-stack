@@ -27,3 +27,8 @@ output "monitoring_namespace" {
   description = "Monitoring namespace"
   value       = module.monitoring.namespace
 }
+
+output "github_actions_role_arn" {
+  description = "IAM role ARN for GitHub Actions ECR push via OIDC"
+  value       = module.ecr.github_actions_role_arn
+}

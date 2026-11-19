@@ -28,3 +28,6 @@ repositories = [
   "product-service",
   "user-service"
 ]
+
+github_org  = "gitcliff"
+github_repo = "microservices-devops-stack"
