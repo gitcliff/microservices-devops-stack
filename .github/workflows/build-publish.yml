@@ -12,7 +12,7 @@ on:
     branches: [main]
     # Ignore manifest-only commits from this workflow to prevent infinite loops.
     paths-ignore:
-      - 'k8s/overlays/*/kustomization.yaml'
+      - "k8s/overlays/*/kustomization.yaml"
   workflow_dispatch:
 
 # Prevent two publish runs from racing on the same ref.
