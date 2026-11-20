@@ -1,0 +1,320 @@
+name: Infrastructure Validation
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Trigger: PRs that touch Infrastructure/ files. Validates Terraform changes
+# with format checks, linting, security scanning, cost estimation, and a
+# speculative plan — all before any changes reach main.
+#
+# Trust boundary: AWS credentials (via OIDC) are read-only. No state-mutating
+# operations (apply/destroy) run in this workflow.
+# ──────────────────────────────────────────────────────────────────────────────
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - "Infrastructure/**"
+      - ".github/workflows/infra-validation.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: infra-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.9"
+  TF_WORKING_DIR: Infrastructure
+  AWS_REGION: us-east-1
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Jobs run in waves:
+#   Wave 1 (parallel): fmt | validate+lint | security-scan
+#   Wave 2:            plan + cost estimate (needs validate)
+#   Wave 3:            gate (aggregates all results)
+# ──────────────────────────────────────────────────────────────────────────────
+
+jobs:
+  # ============================================================
+  # 1. FORMAT CHECK
+  #    Ensures all .tf files follow canonical formatting.
+  # ============================================================
+  fmt:
+    name: Terraform Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269571ab # v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive -diff
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+  # ============================================================
+  # 2. VALIDATE + LINT
+  #    Runs terraform validate and tflint for deeper checks.
+  # ============================================================
+  validate:
+    name: Validate & Lint
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269571ab # v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # AWS credentials needed for terraform init (backend + provider).
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: ${{ secrets.INFRA_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        run: terraform init -backend=false
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform validate
+        run: terraform validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      # ── TFLint ──────────────────────────────────────────────
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4
+        with:
+          tflint_version: latest
+
+      - name: Init TFLint plugins
+        run: tflint --init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Run TFLint
+        run: tflint --recursive --format compact
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+  # ============================================================
+  # 3. SECURITY SCAN
+  #    Runs Checkov for Terraform misconfigurations and CIS
+  #    benchmark violations. Fails on HIGH/CRITICAL findings.
+  # ============================================================
+  security-scan:
+    name: Security Scan (Checkov)
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: ${{ env.TF_WORKING_DIR }}
+          framework: terraform
+          # Fail on HIGH and CRITICAL severity findings.
+          soft_fail: false
+          # Skip checks that are not relevant for this setup or produce
+          # false positives on EKS module patterns.
+          skip_check: CKV_AWS_79
+          output_format: cli
+          output_file_path: console
+
+  # ============================================================
+  # 4. TERRAFORM PLAN + COST ESTIMATE
+  #    Generates a speculative plan and estimates cost impact.
+  #    Posts both as a PR comment for reviewer visibility.
+  # ============================================================
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    needs: validate
+
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269571ab # v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: true
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: ${{ secrets.INFRA_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        run: terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform plan
+        id: plan
+        run: |
+          terraform plan \
+            -detailed-exitcode \
+            -no-color \
+            -out=tfplan \
+            2>&1 | tee plan_output.txt
+          echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        continue-on-error: true
+
+      - name: Save plan as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TF_WORKING_DIR }}/tfplan
+          retention-days: 7
+
+      # ── INFRACOST ───────────────────────────────────────────
+      # Estimates the monthly cost impact of the planned changes.
+      - name: Setup Infracost
+        if: github.event_name == 'pull_request'
+        uses: infracost/actions/setup@48ed4e38febb2cd24eb6e1f230132f9f6c4bfa9e # v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+          currency: USD
+
+      - name: Generate Infracost cost estimate
+        if: github.event_name == 'pull_request' && secrets.INFRACOST_API_KEY != ''
+        run: |
+          infracost breakdown \
+            --path="${{ env.TF_WORKING_DIR }}" \
+            --format=json \
+            --out-file=/tmp/infracost.json
+        continue-on-error: true
+
+      - name: Post Infracost PR comment
+        if: github.event_name == 'pull_request' && secrets.INFRACOST_API_KEY != ''
+        run: |
+          infracost comment github \
+            --path=/tmp/infracost.json \
+            --repo="${{ github.repository }}" \
+            --pull-request="${{ github.event.pull_request.number }}" \
+            --github-token="${{ github.token }}" \
+            --behavior=update
+        continue-on-error: true
+
+      # ── POST PLAN TO PR ─────────────────────────────────────
+      - name: Post plan to PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          PLAN_OUTPUT: ${{ steps.plan.outputs.stdout || '' }}
+          PLAN_EXIT: ${{ steps.plan.outputs.exitcode || '0' }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const planOutput = process.env.PLAN_OUTPUT || 'No plan output captured.';
+            // Truncate to fit GitHub comment limits (65536 chars max).
+            const maxLen = 60000;
+            const truncated = planOutput.length > maxLen
+              ? planOutput.substring(0, maxLen) + '\n\n... (truncated)'
+              : planOutput;
+
+            const exitCode = process.env.PLAN_EXIT;
+            let status = '🟢 No changes detected';
+            if (exitCode === '2') status = '🔄 Changes detected';
+            if (exitCode === '1') status = '❌ Plan failed';
+
+            const body = `### Terraform Plan — ${status}
+
+            <details><summary>Show plan output</summary>
+
+            \`\`\`hcl
+            ${truncated}
+            \`\`\`
+
+            </details>
+
+            *Triggered by commit \`${context.sha.substring(0, 8)}\`*`;
+
+            // Update or create a plan comment (look for existing one).
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const marker = '### Terraform Plan —';
+            const existing = comments.find(c => c.body.startsWith(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail if plan errored
+        if: steps.plan.outputs.exitcode == '1'
+        run: exit 1
+
+  # ============================================================
+  # MERGE GATE
+  #   Single status check for branch protection. Aggregates
+  #   results from all validation jobs.
+  # ============================================================
+  infra-gate:
+    name: Infra PR Gate
+    if: always()
+    needs: [fmt, validate, security-scan, plan]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Evaluate job results
+        run: |
+          failed=0
+
+          for pair in \
+            "fmt:${{ needs.fmt.result }}" \
+            "validate:${{ needs.validate.result }}" \
+            "security-scan:${{ needs.security-scan.result }}" \
+            "plan:${{ needs.plan.result }}"; do
+            job="${pair%%:*}"
+            result="${pair#*:}"
+            if [[ "$result" != "success" ]]; then
+              echo "❌ Job '$job' did not succeed (result: $result)"
+              failed=1
+            fi
+          done
+
+          if [[ "$failed" -eq 1 ]]; then
+            exit 1
+          fi
+          echo "✅ All infrastructure validation jobs passed"
