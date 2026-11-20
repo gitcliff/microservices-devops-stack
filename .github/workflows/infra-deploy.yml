@@ -1,0 +1,246 @@
+name: Infrastructure Deploy
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Trigger: pushes to main that touch Infrastructure/ files (post-merge).
+# Also supports manual dispatch for ad-hoc applies.
+#
+# Safety model:
+#   1. Plan is regenerated from the merged code (never reused from PR).
+#   2. An environment protection rule ("infrastructure") gates the apply,
+#      requiring manual approval from designated reviewers.
+#   3. State is locked during apply to prevent concurrent mutations.
+#   4. A drift detection schedule catches out-of-band changes.
+#
+# Trust boundary: AWS credentials (via OIDC) have write access to the
+# infrastructure account. The apply job runs only after the plan job
+# succeeds and the environment approval is granted.
+# ──────────────────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Infrastructure/**"
+      - ".github/workflows/infra-deploy.yml"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to perform"
+        required: true
+        type: choice
+        options:
+          - plan-only
+          - plan-and-apply
+        default: plan-only
+
+  # ── DRIFT DETECTION ─────────────────────────────────────────
+  # Weekly plan-only run to detect out-of-band changes.
+  schedule:
+    - cron: "0 6 * * 1" # Every Monday at 06:00 UTC
+
+# Only one infra deploy at a time — never interrupt a running apply.
+concurrency:
+  group: infra-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.9"
+  TF_WORKING_DIR: Infrastructure
+  AWS_REGION: us-east-1
+
+jobs:
+  # ============================================================
+  # 1. PLAN
+  #    Generates a fresh plan from the merged state of main.
+  #    Outputs whether changes were detected so downstream jobs
+  #    can short-circuit when nothing changed.
+  # ============================================================
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    outputs:
+      has_changes: ${{ steps.plan.outputs.has_changes }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269571ab # v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: ${{ secrets.INFRA_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        run: terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform plan
+        id: plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          set +e
+          terraform plan \
+            -detailed-exitcode \
+            -out=tfplan \
+            -input=false \
+            2>&1 | tee plan_output.txt
+          exitcode=$?
+          set -e
+
+          if [[ "$exitcode" -eq 2 ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Terraform detected infrastructure changes."
+          elif [[ "$exitcode" -eq 0 ]]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No infrastructure changes detected."
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Terraform plan failed."
+            exit 1
+          fi
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ github.sha }}
+          path: |
+            ${{ env.TF_WORKING_DIR }}/tfplan
+            ${{ env.TF_WORKING_DIR }}/plan_output.txt
+          retention-days: 7
+
+      - name: Write plan summary
+        if: always()
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          {
+            echo "## Infrastructure Plan Summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Commit  | \`${{ github.sha }}\` |"
+            echo "| Trigger | \`${{ github.event_name }}\` |"
+            echo "| Changes | \`${{ steps.plan.outputs.has_changes }}\` |"
+            echo ""
+            echo "<details><summary>Plan output</summary>"
+            echo ""
+            echo "\`\`\`"
+            cat plan_output.txt || echo "Plan output not available."
+            echo "\`\`\`"
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================
+  # 2. APPLY
+  #    Applies the plan to the target AWS account.
+  #
+  #    Gated by:
+  #    - Plan must succeed with changes detected
+  #    - GitHub Environment protection rules ("infrastructure")
+  #      requiring manual approval from designated reviewers
+  #    - Not a plan-only dispatch or scheduled drift check
+  # ============================================================
+  apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: plan
+
+    # Skip apply when:
+    #   - No changes detected
+    #   - Manual dispatch with plan-only
+    #   - Scheduled drift detection run
+    if: |
+      needs.plan.outputs.has_changes == 'true'
+      && (github.event_name != 'workflow_dispatch' || inputs.action == 'plan-and-apply')
+      && github.event_name != 'schedule'
+
+    # Environment protection rules enforce manual approval.
+    # Configure required reviewers in GitHub Settings → Environments → "infrastructure".
+    environment:
+      name: infrastructure
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269571ab # v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: ${{ secrets.INFRA_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        run: terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ github.sha }}
+          path: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -auto-approve -input=false tfplan
+
+      - name: Write apply summary
+        if: always()
+        run: |
+          {
+            echo "## Infrastructure Apply Summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Commit   | \`${{ github.sha }}\` |"
+            echo "| Status   | \`${{ job.status }}\` |"
+            echo "| Trigger  | \`${{ github.event_name }}\` |"
+            echo "| Approver | \`${{ github.actor }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================
+  # 3. DRIFT NOTIFICATION
+  #    On scheduled runs, notify if drift is detected.
+  # ============================================================
+  drift-notify:
+    name: Drift Notification
+    runs-on: ubuntu-latest
+    needs: plan
+    if: github.event_name == 'schedule' && needs.plan.outputs.has_changes == 'true'
+
+    steps:
+      - name: Report drift detected
+        run: |
+          echo "::warning::Infrastructure drift detected! Resources in AWS differ from Terraform state."
+          echo "Review the plan artifact and run a manual apply to reconcile."
+
+          {
+            echo "## ⚠️ Infrastructure Drift Detected"
+            echo ""
+            echo "The weekly drift detection scan found differences between"
+            echo "the Terraform configuration and actual AWS resources."
+            echo ""
+            echo "**Action required:** Review the [plan artifact](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) and apply changes if appropriate."
+          } >> "$GITHUB_STEP_SUMMARY"
