@@ -1,6 +1,6 @@
 # End 2 End Microservices — DevOps Stack
 
-A portfolio-grade microservices e-commerce application with a production-minded CI/CD pipeline featuring automated container builds, vulnerability scanning, SBOM generation, and Docker Hub publishing.
+A microservices e-commerce application deployed to **Amazon EKS**. Terraform builds the AWS platform, GitHub Actions validates, scans and publishes every image to **Amazon ECR** through OIDC, and **Argo CD** deploys the result from Git.
 
 ---
 
@@ -15,6 +15,33 @@ A portfolio-grade microservices e-commerce application with a production-minded 
 | order-service   | 3004 | Order processing (JavaScript)   |
 | orders          | 3005 | Order management (TypeScript)   |
 | user-service    | 3006 | User profiles (TypeScript)      |
+
+---
+
+## Platform Overview
+
+```mermaid
+flowchart LR
+    DEV[Developer] --> GH[GitHub]
+    GH --> PRV[PR validation<br/>9 checks]
+    GH --> INF[Infrastructure workflows<br/>fmt, validate, Checkov, plan, apply]
+    INF --> TF[Terraform]
+    TF --> AWS[VPC + EKS + ECR + monitoring<br/>+ Argo CD]
+    GH --> PUB[Build, scan, SBOM, publish]
+    PUB --> ECR[Amazon ECR<br/>digest-pinned images]
+    PUB --> OV[Dev overlay updated<br/>with new digests]
+    OV --> ARGO[Argo CD<br/>app-of-apps]
+    ARGO --> EKS[Amazon EKS<br/>boutique-dev and boutique-prod]
+```
+
+| Layer | What is used | Where |
+| ----- | ------------ | ----- |
+| Infrastructure as code | Terraform modules: `vpc`, `eks`, `ecr`, `argocd`, `monitoring` | `Infrastructure/` |
+| Container registry | Amazon ECR, immutable tags, scan on push, GitHub OIDC push role | `Infrastructure/modules/ecr` |
+| GitOps | Argo CD app-of-apps with `boutique-dev`, `boutique-prod` and `monitoring` applications | `argocd/` |
+| Kubernetes manifests | Kustomize base plus `dev` and `prod` overlays (Ingress, Postgres StatefulSet, ServiceMonitors, Grafana dashboard) | `k8s/` |
+| Observability | kube-prometheus-stack (Prometheus and Grafana) installed by Argo CD | `argocd/apps/base/monitoring.yaml` |
+| CI/CD | Four workflows: PR validation, build and publish, infrastructure validation, infrastructure deploy | `.github/workflows/` |
 
 ---
 
@@ -40,8 +67,9 @@ flowchart TD
     SBOM --> VG{Vulnerability gate\nHIGH/CRITICAL}
     VG -->|fail| BLOCK[Block — no publish]
     VG -->|pass| SAVE[Save image archive]
-    SAVE --> PUB[Publish to Docker Hub]
-    PUB --> DS2[Record digest]
+    SAVE --> PUB[Publish to Amazon ECR via OIDC]
+    PUB --> ATT[Attest provenance and SBOM]
+    ATT --> DS2[Record digest and update dev overlay]
 ```
 
 ### Two-workflow model
@@ -49,9 +77,9 @@ flowchart TD
 | Workflow            | Trigger               | Publishes images? | Exposes registry credentials? |
 | ------------------- | --------------------- | ----------------- | ----------------------------- |
 | `pr-validation.yml` | Pull requests to main | No                | No                            |
-| `build-publish.yml` | Push to main / manual | Yes               | Only after all gates pass     |
+| `build-publish.yml` | Push to main / manual | Yes (ECR)         | Only after all gates pass (short-lived OIDC role, no stored keys) |
 
-**Why separate workflows?** PR validation runs untrusted contributor code. Mixing registry credentials into that workflow risks secret exposure. The publishing workflow runs only on trusted, merged code.
+**Why separate workflows?** PR validation runs untrusted contributor code. Giving that workflow access to the registry would put the push role at risk. The publishing workflow runs only on trusted, merged code.
 
 ---
 
@@ -59,18 +87,21 @@ flowchart TD
 
 ### Triggers
 
-- **Automatic:** every merge to `main`
-- **Manual:** `workflow_dispatch` from the GitHub Actions UI (any authorised actor)
+- **Automatic:** every merge to `main` (commits that only change `k8s/overlays/*/kustomization.yaml` are ignored, so the workflow does not trigger itself)
+- **Manual:** `workflow_dispatch` from the GitHub Actions UI
 
 ### Job sequence
 
 ```
-build-scan-sbom  (matrix × 7 services, parallel)
+build-scan-sbom  (matrix × 7 services)
        │
        ▼  all must pass
-    publish      (matrix × 7 services, parallel)
+    publish      (matrix × 7 services: push to ECR, attest, record digest)
        │
-       ▼  always
+       ▼
+  update dev overlay  (kustomize edit set image, committed back to main)
+       │
+       ▼
   release-summary
 ```
 
@@ -78,69 +109,63 @@ build-scan-sbom  (matrix × 7 services, parallel)
 
 **`build-scan-sbom`**
 
-1. Checks out the trusted source revision.
-2. Builds the production Docker image.
-3. Generates a CycloneDX JSON SBOM from the final image (evidence retained regardless of gate result).
-4. Runs the Trivy vulnerability gate — blocks publication on HIGH or CRITICAL findings.
-5. Saves the scanned image as a tar archive and uploads it as an artifact.
+1. Builds the production Docker image once.
+2. Generates a CycloneDX JSON SBOM from the final image (kept even if the gate blocks publishing).
+3. Runs the Trivy vulnerability gate, which blocks on HIGH or CRITICAL findings that have a fix.
+4. Saves the scanned image as a tar archive and uploads it as an artifact.
 
 **`publish`**
 
-1. Downloads the exact pre-scanned archive (no rebuild).
-2. Logs in to Docker Hub — credentials are only present in this job.
-3. Loads and pushes the SHA-tagged image.
-4. Applies the `main` moving alias (push-to-main events only).
-5. Captures and records the image digest.
+1. Downloads the exact pre-scanned archive (no rebuild), so the published image is the scanned image.
+2. Assumes an AWS role through GitHub OIDC. Credentials exist only in this job and expire when it ends.
+3. Pushes the `sha-<full-git-sha>` tag to Amazon ECR and captures the image digest.
+4. Creates signed SLSA build provenance and an SBOM attestation bound to that digest.
+
+**`update dev overlay`**
+
+- Writes the ECR URIs and immutable `sha256` digests into `k8s/overlays/dev/kustomization.yaml`. Argo CD then syncs dev automatically. **Prod is promoted by hand** by copying validated digests into the prod overlay.
 
 **`release-summary`**
 
-- Always runs; writes a structured digest table to the workflow summary.
+- Always runs and writes a table of images and digests to the workflow summary.
+
+---
+
+## Infrastructure Workflows
+
+| Workflow | Trigger | What it does |
+| -------- | ------- | ------------ |
+| `infra-validation.yml` | Pull requests that touch `Infrastructure/` | `terraform fmt`, validate with TFLint, Checkov security scan, a plan, and an **Infra PR Gate** |
+| `infra-deploy.yml` | Push to `main`, manual dispatch, weekly schedule | Plan, then apply behind the `infrastructure` environment's **manual approval**. Manual runs can be plan-only. A Monday 06:00 UTC plan-only run reports drift. |
+
+AWS access in both workflows uses GitHub OIDC with no long-lived keys.
 
 ---
 
 ## Image Naming and Tagging
 
-### Registry namespace
+### Registry
 
 ```
-docker.io/<DOCKERHUB_USERNAME>/boutique-<service>:<tag>
+<account-id>.dkr.ecr.<region>.amazonaws.com/<service>:<tag>
 ```
 
-Example:
+ECR repositories are created by Terraform with **immutable tags** and **scan on push**.
 
-```
-docker.io/myorg/boutique-auth:sha-<full-git-sha>
-```
+### Tags and digests
 
-### Tags applied per publish
+| Concept | Example | Mutable? |
+| ------- | ------- | -------- |
+| Tag | `auth:sha-<full-git-sha>` | No (ECR enforces tag immutability) |
+| Digest | `auth@sha256:def456...` | No (content-addressed) |
 
-| Tag                  | Example           | Mutable? | Purpose                         |
-| -------------------- | ----------------- | -------- | ------------------------------- |
-| `sha-<full-git-sha>` | `sha-a1b2c3d4...` | No¹      | Primary deployment identifier   |
-| `main`               | `main`            | Yes      | Convenience pointer for scripts |
+**`latest` is never applied.** It makes rollback and audit impossible. Deployments reference the digest, which Kustomize writes into the overlay.
 
-¹ Tags are immutable by content-addressed digest, but Docker Hub does not enforce tag-name immutability on free plans. A tag name can be overwritten by pushing again. Use the digest for guaranteed identity (see below).
-
-**`latest` is never applied.** Using `latest` as a deployment identifier makes rollback and audit impossible.
-
-### Tag vs. digest
-
-| Concept | Example                          | Mutable?                       |
-| ------- | -------------------------------- | ------------------------------ |
-| Tag     | `boutique-auth:sha-abc123`       | Yes — a name can be reassigned |
-| Digest  | `boutique-auth@sha256:def456...` | No — content-addressed         |
-
-To pull a specific, immutable image:
+### Verifying an image
 
 ```bash
-# By SHA tag (usually sufficient)
-docker pull myorg/boutique-auth:sha-<full-git-sha>
-
-# By digest (guaranteed identity, unaffected by tag mutation)
-docker pull myorg/boutique-auth@sha256:def456...
+gh attestation verify oci://<registry>/<service>@sha256:<digest> --owner gitcliff
 ```
-
-Digests for each run are recorded in the workflow summary and as downloadable artifacts (`digest-boutique-*`).
 
 ---
 
@@ -174,90 +199,35 @@ Do not add CVE IDs to `.trivyignore` merely to make CI green.
 
 ---
 
-## SBOM
+## SBOM and Attestations
 
-**Format:** CycloneDX JSON (`*.cdx.json`)
+**Format:** CycloneDX JSON (`*.cdx.json`), generated by Trivy from the final production image.
 
-**Naming:** `sbom-boutique-<service>` artifact, file `boutique-<service>-sha-<sha>.cdx.json`
+**Where it lives:**
 
-**Contents:** OS packages and application dependencies discovered in the final production image by Trivy.
+- As a 30-day GitHub Actions artifact: `sbom-<service>`
+- As a signed **SBOM attestation** bound to the pushed image digest (`actions/attest-sbom`)
 
-**Retention:** 30 days as a GitHub Actions artifact.
+**Provenance:** `actions/attest-build-provenance` creates signed SLSA build provenance for each image digest.
 
-**When generated:** Before the vulnerability gate — retained even if the gate blocks publication.
+**When generated:** before the vulnerability gate, so evidence is kept even when the gate blocks publication.
 
-**Limitations:**
-
-- SBOMs are stored as GitHub Actions artifacts, not attached to Docker Hub images.
-- SBOMs are not cryptographically signed or attested in the current implementation.
-- Attestation via `docker buildx imagetools` or `cosign` is a documented future enhancement.
-
-To download an SBOM:
-
-```
-GitHub Actions run → Artifacts → sbom-boutique-<service>
-```
-
----
-
-## Configuring Docker Hub Credentials
-
-You must configure the following in your GitHub repository settings before the workflow can publish:
-
-### 1. Repository Secrets
-
-`Settings → Secrets and variables → Actions → Secrets → New repository secret`
-
-| Name                 | Value                                    |
-| -------------------- | ---------------------------------------- |
-| `DOCKERHUB_USERNAME` | Your Docker Hub username or organisation |
-| `DOCKERHUB_TOKEN`    | A Docker Hub Personal Access Token       |
-
-Both are stored as secrets so they do not appear in workflow logs or in expression expansions visible to untrusted code.
-
-**Create the PAT on Docker Hub:** Account Settings → Security → New Access Token.
-
-Recommended PAT permissions: **Read, Write, Delete** scoped to the target repositories only. Do not use your Docker Hub password.
-
-### 3. (Optional) Docker Hub tag immutability
-
-Docker Hub supports tag immutability on paid (Team/Business) plans. To protect the `sha-*` tags:
-
-1. Navigate to each repository on Docker Hub.
-2. Enable **Tag immutability** under repository settings.
-3. Immutability prevents the same tag name from being overwritten after it is pushed.
-
-This is recommended for the `sha-<sha>` tags. The `main` tag must remain mutable (by design).
+**Limits:** attestations are stored in GitHub's attestation store, not attached to the ECR image as OCI artifacts, and nothing in the cluster verifies them yet (see Future Enhancements).
 
 ---
 
 ## Finding Published Image Digests
 
-### In the GitHub UI
-
-1. Navigate to the Actions tab.
-2. Open the relevant **Build, Scan & Publish** run.
-3. Scroll to the **workflow summary** at the bottom — a table of images and digests is written there.
-4. Alternatively, download the `digest-boutique-<service>` artifact from the run's artifact list.
-
-### From the command line
-
-```bash
-# Inspect a pushed image to retrieve its digest
-docker pull myorg/boutique-auth:sha-<sha>
-docker inspect myorg/boutique-auth:sha-<sha> \
-  --format '{{index .RepoDigests 0}}'
-
-# Pull by digest (immutable reference)
-docker pull myorg/boutique-auth@sha256:<digest>
-```
+1. Open the relevant **Build, Scan & Publish** run in the Actions tab.
+2. Read the table in the workflow summary, or download the `digest-<service>` artifact.
+3. Or read them from the dev overlay: `k8s/overlays/dev/kustomization.yaml`.
 
 ---
 
 ## Running Locally with Docker Compose
 
 ```bash
-cd projects/boutique-microservices
+cp .env.example .env        # set POSTGRES_PASSWORD and the JWT secrets
 
 # Build and start all services
 docker compose up --build -d
@@ -276,39 +246,45 @@ docker compose down -v
 
 ### Implemented
 
-- [x] Build images from correct Dockerfiles with correct build contexts
-- [x] Commit SHA image tags (`sha-<full-sha>`) — traceable to source
-- [x] `main` moving alias on push-to-main
-- [x] Trivy vulnerability gate (HIGH/CRITICAL, `--ignore-unfixed`)
-- [x] CycloneDX SBOM generation per service from the final image
-- [x] SBOM retained as 30-day GitHub Actions artifact
-- [x] Artifact integrity: scan and publish operate on the same tar archive
-- [x] Registry credentials isolated to publish job only
-- [x] Image digest capture and workflow summary
-- [x] `.dockerignore` for frontend and backend build contexts
-- [x] Documented `.trivyignore` exceptions with rationale
-- [x] Least-privilege GitHub token permissions
-- [x] Concurrency control (no concurrent publishes to same ref)
+- [x] Terraform modules for VPC, EKS, ECR, Argo CD and monitoring, with plan, approval-gated apply and weekly drift detection
+- [x] Infrastructure PR checks: format, validate, TFLint and Checkov
+- [x] GitOps deployment with Argo CD (app-of-apps, dev and prod applications, automated sync with self-heal)
+- [x] Kustomize base with dev and prod overlays
+- [x] Build, scan and publish pipeline with the same Trivy policy in PRs and on publish
+- [x] CycloneDX SBOM per service, kept as an artifact and attested to the image digest
+- [x] Signed SLSA build provenance for every published image
+- [x] Amazon ECR push through GitHub OIDC; the role is only available to the publish job
+- [x] Immutable `sha-<full-sha>` tags, digest capture and digest-pinned deployments
+- [x] Dev overlay updated automatically after each publish
+- [x] Third-party actions pinned to commit SHAs in the infrastructure and publish workflows
+- [x] Least-privilege token permissions and concurrency control
 
 ### Future Enhancements
 
-- [ ] **SHA-pin third-party actions** — `docker/login-action`, `docker/setup-buildx-action`, and `aquasecurity/trivy-action` are currently referenced by version tag. Pin to commit SHAs and add renovatebot or dependabot to keep them updated.
-- [ ] **SBOM attestation** — Attach SBOMs to images as OCI artifacts using `cosign attest` or `docker buildx imagetools`. Requires cosign setup and a key management decision.
-- [ ] **Provenance attestation** — Generate SLSA build provenance using `actions/attest-build-provenance`. Requires `id-token: write` permission.
-- [ ] **Tag immutability on Docker Hub** — Enable on Team/Business plan for `sha-*` tags.
-- [ ] **Semantic version tags** — Add `v*` tag support for formal releases triggered by git tags.
-- [ ] **Multi-platform builds** — Add `linux/arm64` via `docker buildx` with `--platform linux/amd64,linux/arm64`. Requires re-evaluating the save/load artifact strategy (OCI layout instead of single-platform tar).
-- [ ] **Scheduled rescan** — A weekly workflow that re-scans published images against the latest Trivy DB to catch newly disclosed CVEs in already-deployed images.
-- [ ] **Base image update automation** — Renovatebot or Dependabot configuration to open PRs when `node:22-alpine` receives a patch.
+- [ ] **Pin the remaining actions** (for example `bridgecrewio/checkov-action@master`) and add Dependabot or Renovate to keep pins current.
+- [ ] **Verify attestations in-cluster** with an admission policy (Kyverno or Sigstore policy-controller).
+- [ ] **External secrets for production:** replace the placeholders in `k8s/overlays/prod/secrets.yaml` with External Secrets or Sealed Secrets.
+- [ ] **Prod promotion workflow:** replace the manual digest copy with a reviewed promotion pull request.
+- [ ] **Semantic version tags** for formal releases.
+- [ ] **Multi-platform builds** (`linux/arm64`); this needs the save/load artifact approach reworked.
+- [ ] **Scheduled rescan** of published images against the latest Trivy database.
+- [ ] **Base image update automation.**
+
+---
+
+## Known Limitations
+
+- Production values are placeholders: `k8s/overlays/prod/secrets.yaml` and the `PENDING` image digests in the prod overlay must be replaced before a real production rollout.
+- The files `argocd/values/monitoring-dev.yaml` and `monitoring-prod.yaml` contain placeholder Grafana admin passwords. The `monitoring` Argo CD application defines its own inline values and does not read these files today, but replace the passwords with an external secret before using them.
+- Kubernetes secrets in the repository are demo values.
 
 ---
 
 ## Security Posture
 
-This project implements a **security-conscious CI/CD pipeline** suitable as a portfolio demonstration. It is not a fully production-hardened supply chain and should not be represented as such without the following additional controls:
+This project implements a **security-conscious CI/CD pipeline and GitOps deployment** suitable as a portfolio demonstration. It is not a fully production-hardened platform. Still missing:
 
-- SBOM attestation and signing (cosign)
-- SLSA provenance generation and verification
-- Registry tag immutability
+- Admission-time verification of image signatures and attestations
+- External secret management for production
+- Runtime security and network policy enforcement
 - Dependency update automation
-- Runtime security (admission controllers, policy enforcement)
