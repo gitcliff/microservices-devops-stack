@@ -11,25 +11,25 @@ commonLabels:
 # `kustomize edit set image` updates this block with ECR URIs and
 # immutable sha256 digests after each successful publish.
 images:
-- digest: sha256:7df09d53f30bf680a708a074921671e8c34e90f0ab45efb13213b91bee5e3f31
+- digest: sha256:8058e8c345ce2ce9808122fde8085a44c67234a208dedf2bec9985464cf2301d
   name: boutique/auth
   newName: 501588780081.dkr.ecr.us-east-1.amazonaws.com/auth
-- digest: sha256:3ffdfa62fe76a40f909817a17d746f1d58385990311d6eae13c75af758609d9f
+- digest: sha256:5a3a78c195255209954094ad6419889fc119943224d5e7e9a48fe9aeae1a748d
   name: boutique/frontend
   newName: 501588780081.dkr.ecr.us-east-1.amazonaws.com/frontend
-- digest: sha256:21626fd9fb3d8fe537bf793b4bdf2247047e9cda473e328830619c7c33beb165
+- digest: sha256:fad12bd11f027be0518435e7b45bd5966c7dbf827f43005763e19bf70f55e4b6
   name: boutique/gateway
   newName: 501588780081.dkr.ecr.us-east-1.amazonaws.com/gateway
-- digest: sha256:ee6aa034cca7c5f30c91b084da67abb123fd7002af210a9124d5e3fa6d187df5
+- digest: sha256:8e593451c764b3f2a9ed14d31126f83ea0f21696f6cc453d047311079d01aa7f
   name: boutique/order-service
   newName: 501588780081.dkr.ecr.us-east-1.amazonaws.com/order-service
-- digest: sha256:d2c88af5a67a53d7e763cf8835471e1a985b6d8ecd4c3f91348f0fe3adcbcdbf
+- digest: sha256:48416387f862e265018ebc2b0de820f565dd745194fd35c9697fdbb92cb94230
   name: boutique/orders
   newName: 501588780081.dkr.ecr.us-east-1.amazonaws.com/orders
-- digest: sha256:8d485b1ed3cdd1de51da2d3466e27275a38467439dd2d109eac822de0739859a
+- digest: sha256:7675cd75612bdd74eb8d3ca6495302ca95153861fb8bbdd3d4c3e8329bbba214
   name: boutique/product-service
   newName: 501588780081.dkr.ecr.us-east-1.amazonaws.com/product-service
-- digest: sha256:77324e28dbb9f69f153a94e8d53bcd2684b9e2ed53b20b67e322d940d91be6ca
+- digest: sha256:c71d58066bc85bb16f464dd32430f36546dfa893379b6397206f2fa787e69e86
   name: boutique/user-service
   newName: 501588780081.dkr.ecr.us-east-1.amazonaws.com/user-service
 
