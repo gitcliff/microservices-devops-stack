@@ -18,7 +18,7 @@ resource "aws_ecr_repository" "repos" {
   for_each = toset(var.repositories)
 
   name         = each.value
-  force_delete = true # To delete the images inside the repo
+  force_delete = true  # To delete the images inside the repo
 
   image_scanning_configuration {
     scan_on_push = true
@@ -35,10 +35,10 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 resource "aws_iam_openid_connect_provider" "github" {
-  url            = "https://token.actions.githubusercontent.com"
-  client_id_list = ["sts.amazonaws.com"]
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1",
-  "1c58a3a8518e8759bf075b76b750d4f2df264fcd", ]
+    "1c58a3a8518e8759bf075b76b750d4f2df264fcd",]
 }
 
 # ─── Trust policy ─────────────────────────────────────────────────────────────
@@ -63,7 +63,9 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:gitcliff@46714226/microservices-devops-stack@1382059702:ref:refs/heads/main"]
+      values   = ["repo:gitcliff/microservices-devops-stack:*"]
+          # "repo:gitcliff@46714226/microservices-devops-stack@1382059702:ref:refs/heads/main"
+
     }
   }
 }

@@ -354,7 +354,7 @@ jobs:
           merge-multiple: true
 
       - name: Setup Kustomize
-        uses: imranismail/setup-kustomize@2ba527d4d7d0b3d12f7f4c5ba8932a8c9c9ed3d7 # v2.1.0
+        uses: imranismail/setup-kustomize@53f941b41dca13ed61874bbc6b4b6e1562877530 # v3.0.0
 
       - name: Update dev overlay with ECR image digests
         env:
