@@ -1,0 +1,127 @@
+name: Trivy Scheduled Rescan
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Rescan all currently-deployed images for newly disclosed vulnerabilities.
+# CVE databases update continuously; an image that passed the build-time gate
+# may become vulnerable days later. This workflow catches that drift.
+# ──────────────────────────────────────────────────────────────────────────────
+on:
+  schedule:
+    - cron: "0 6 * * *" # Daily at 06:00 UTC
+  workflow_dispatch: # Allow manual trigger for ad-hoc rescans
+
+concurrency:
+  group: trivy-rescan
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rescan:
+    name: Rescan Deployed Images
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@7290e214a610b32bc0eef81748948b6d466a8783 # v2
+
+      - name: Extract image references from kustomization
+        id: images
+        run: |
+          # Parse the dev overlay kustomization.yaml to extract deployed image refs.
+          # Each image entry has: name, newName (ECR URI), digest (sha256:...).
+          python3 - <<'PYEOF'
+          import yaml, json
+
+          with open("k8s/overlays/dev/kustomization.yaml") as f:
+              data = yaml.safe_load(f)
+
+          images = []
+          for img in data.get("images", []):
+              new_name = img.get("newName", "")
+              digest = img.get("digest", "")
+              name = img.get("name", "")
+              if new_name and digest:
+                  short_name = name.split("/")[-1] if name else new_name.split("/")[-1]
+                  images.append({"ref": f"{new_name}@{digest}", "name": short_name})
+
+          with open("/tmp/image-refs.json", "w") as f:
+              json.dump(images, f)
+
+          print(f"Found {len(images)} deployed images to rescan:")
+          for img in images:
+              print(f"  {img['name']}: {img['ref']}")
+          PYEOF
+
+      - name: Scan all deployed images
+        run: |
+          IMAGES=$(cat /tmp/image-refs.json)
+          FAILED=0
+          PASSED=0
+          SUMMARY=""
+
+          for row in $(echo "$IMAGES" | jq -c '.[]'); do
+            REF=$(echo "$row" | jq -r '.ref')
+            NAME=$(echo "$row" | jq -r '.name')
+
+            echo "::group::Scanning $NAME"
+            echo "Image: $REF"
+
+            # Run Trivy with the same policy as CI builds
+            set +e
+            trivy image \
+              --config .trivy.yaml \
+              --scanners vuln,secret \
+              --format table \
+              --exit-code 1 \
+              "$REF" 2>&1 | tee "/tmp/trivy-${NAME}.txt"
+            EXIT_CODE=$?
+            set -e
+
+            if [ "$EXIT_CODE" -ne 0 ]; then
+              FAILED=$((FAILED + 1))
+              SUMMARY="${SUMMARY}| \`${NAME}\` | :x: FAIL | New HIGH/CRITICAL vulnerabilities found |\n"
+              echo "::error::${NAME} has new HIGH/CRITICAL vulnerabilities"
+            else
+              PASSED=$((PASSED + 1))
+              SUMMARY="${SUMMARY}| \`${NAME}\` | :white_check_mark: PASS | No new findings |\n"
+            fi
+            echo "::endgroup::"
+          done
+
+          # Write workflow summary
+          {
+            echo "## Trivy Scheduled Rescan Results"
+            echo ""
+            echo "| Service | Status | Details |"
+            echo "|---------|--------|---------|"
+            echo -e "$SUMMARY"
+            echo ""
+            if [ "$FAILED" -gt 0 ]; then
+              echo "> **${FAILED} image(s) have new vulnerabilities since their last build.**"
+              echo "> Rebuild affected services to pick up patched base images."
+            else
+              echo "> All ${PASSED} deployed images remain clean."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Fail the workflow if any image has new findings
+          if [ "$FAILED" -gt 0 ]; then
+            exit 1
+          fi

@@ -1,7 +1,11 @@
+# Pin base image to a specific digest for reproducible builds.
+# To update: run `docker pull node:22-alpine` and replace the digest below.
+ARG NODE_IMAGE=node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a
+
 # =========================================================
 # Stage 1: Build Layer
 # =========================================================
-FROM node:22-alpine AS builder
+FROM ${NODE_IMAGE} AS builder
 
 WORKDIR /backend
 
@@ -25,7 +29,7 @@ RUN npm run build
 # Stage 2: Production Layer (Hardened)
 # =========================================================
 # Using a specific alpine version (e.g., 3.20) gives more predictable security baselines
-FROM node:22-alpine
+FROM ${NODE_IMAGE}
 
 WORKDIR /app
 

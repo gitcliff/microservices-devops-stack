@@ -32,3 +32,8 @@ output "github_actions_role_arn" {
   description = "IAM role ARN for GitHub Actions ECR push via OIDC"
   value       = module.ecr.github_actions_role_arn
 }
+
+output "kyverno_namespace" {
+  description = "Kyverno namespace"
+  value       = module.kyverno.namespace
+}
