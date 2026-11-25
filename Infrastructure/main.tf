@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 module "vpc" {
   source = "./modules/vpc"
 
@@ -79,6 +81,21 @@ module "monitoring" {
     kubernetes = kubernetes.eks
     helm       = helm.eks
   }
+
+  depends_on = [module.eks]
+}
+
+# --- Kyverno Admission Controller ---
+
+module "kyverno" {
+  source = "./modules/kyverno"
+
+  providers = {
+    kubernetes = kubernetes.eks
+    helm       = helm.eks
+  }
+
+  ecr_registry = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com"
 
   depends_on = [module.eks]
 }

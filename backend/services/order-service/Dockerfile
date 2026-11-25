@@ -2,7 +2,10 @@
 # Production Layer (Hardened)
 # =========================================================
 # order-service is plain JavaScript — no TypeScript build stage needed.
-FROM node:22-alpine
+# Pin base image to a specific digest for reproducible builds.
+# To update: run `docker pull node:22-alpine` and replace the digest below.
+ARG NODE_IMAGE=node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a
+FROM ${NODE_IMAGE}
 
 WORKDIR /app
 
