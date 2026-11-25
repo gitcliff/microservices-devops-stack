@@ -63,7 +63,7 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:gitcliff/microservices-devops-stack:*"]
+      values   = ["repo:gitcliff@46714226/microservices-devops-stack@1382059702:ref:refs/heads/main"]
           # "repo:gitcliff@46714226/microservices-devops-stack@1382059702:ref:refs/heads/main"
 
     }
