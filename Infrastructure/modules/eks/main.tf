@@ -34,7 +34,7 @@ resource "aws_eks_cluster" "eks" {
   }
 
   encryption_config {
-    resources = ["secrets"]
+    resources = ["secrets"]   # Encrypt K8s Secrets at rest
     provider {
       key_arn = aws_kms_key.eks_secrets.arn
     }
