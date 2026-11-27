@@ -37,3 +37,13 @@ output "kyverno_namespace" {
   description = "Kyverno namespace"
   value       = module.kyverno.namespace
 }
+
+output "backup_vault_name" {
+  description = "AWS Backup vault name"
+  value       = module.backup.vault_name
+}
+
+output "backup_plan_id" {
+  description = "AWS Backup plan ID"
+  value       = module.backup.plan_id
+}

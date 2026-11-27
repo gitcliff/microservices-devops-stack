@@ -4,7 +4,7 @@ metadata:
   name: postgres
 spec:
   serviceName: postgres
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: postgres
@@ -19,6 +19,13 @@ spec:
         fsGroup: 70
         seccompProfile:
           type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: postgres
       containers:
         - name: postgres
           image: postgres:15-alpine
@@ -69,9 +76,6 @@ spec:
               memory: "512Mi"
               cpu: "500m"
       volumes:
-        - name: postgres-data
-          persistentVolumeClaim:
-            claimName: postgres-pvc
         - name: init-scripts
           configMap:
             name: postgres-init-scripts
@@ -82,3 +86,13 @@ spec:
         - name: tmp
           emptyDir:
             medium: Memory
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        storageClassName: gp3-encrypted
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
