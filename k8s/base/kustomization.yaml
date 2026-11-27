@@ -13,10 +13,11 @@ resources:
   # - grafana-dashboard.yaml
   - secrets.yaml
   - ingress.yaml
+  - storage/storageclass.yaml
   - postgres/init-configmap.yaml
-  - postgres/pvc.yaml
   - postgres/statefulset.yaml
   - postgres/service.yaml
+  - postgres/pdb.yaml
   - services/auth/deployment.yaml
   - services/product-service/deployment.yaml
   - services/order-service/deployment.yaml
