@@ -99,3 +99,13 @@ module "kyverno" {
 
   depends_on = [module.eks]
 }
+
+# --- AWS Backup (EBS Volume Snapshots) ---
+
+module "backup" {
+  source = "./modules/backup"
+
+  cluster_name = var.cluster_name
+
+  depends_on = [module.eks]
+}

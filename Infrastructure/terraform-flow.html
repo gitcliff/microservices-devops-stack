@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terraform Infrastructure Flow - Boutique Microservices</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --heading: #f0f6fc;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --orange: #d29922;
+      --red: #f85149;
+      --purple: #bc8cff;
+      --code-bg: #0d1117;
+      --code-border: #30363d;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 2rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: var(--heading);
+      font-size: 2rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h2 {
+      color: var(--accent);
+      font-size: 1.5rem;
+      margin-top: 3rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h3 {
+      color: var(--green);
+      font-size: 1.15rem;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+    }
+
+    h4 {
+      color: var(--purple);
+      font-size: 1rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    p { margin-bottom: 1rem; }
+
+    .phase-badge {
+      display: inline-block;
+      background: var(--accent);
+      color: var(--bg);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.15rem 0.6rem;
+      border-radius: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    .phase-badge.green { background: var(--green); }
+    .phase-badge.orange { background: var(--orange); }
+    .phase-badge.red { background: var(--red); }
+    .phase-badge.purple { background: var(--purple); }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+
+    code {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 0.85em;
+    }
+
+    p code, li code {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.15em 0.4em;
+      color: var(--accent);
+    }
+
+    .why-box {
+      background: var(--surface);
+      border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .why-box strong {
+      color: var(--accent);
+    }
+
+    .warn-box {
+      background: rgba(210, 153, 34, 0.1);
+      border-left: 3px solid var(--orange);
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .warn-box strong {
+      color: var(--orange);
+    }
+
+    .resource-count {
+      background: rgba(63, 185, 80, 0.1);
+      border: 1px solid rgba(63, 185, 80, 0.3);
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      margin-bottom: 1rem;
+      font-weight: 600;
+      color: var(--green);
+    }
+
+    .dep-graph {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 0.85rem;
+      white-space: pre;
+      line-height: 1.5;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+    }
+
+    th {
+      background: var(--surface);
+      color: var(--heading);
+      text-align: left;
+      padding: 0.6rem 1rem;
+      border: 1px solid var(--border);
+    }
+
+    td {
+      padding: 0.6rem 1rem;
+      border: 1px solid var(--border);
+    }
+
+    tr:nth-child(even) { background: rgba(22, 27, 34, 0.5); }
+
+    .toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .toc h3 { margin-top: 0; color: var(--heading); }
+
+    .toc ol {
+      padding-left: 1.25rem;
+      margin: 0;
+    }
+
+    .toc li {
+      margin-bottom: 0.3rem;
+    }
+
+    .toc a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .toc a:hover { text-decoration: underline; }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    .header-meta {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+
+    .header-meta span {
+      margin-right: 1.5rem;
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2rem 0;
+    }
+
+    .keyword { color: var(--purple); }
+    .string { color: #a5d6ff; }
+    .comment { color: var(--text-muted); font-style: italic; }
+    .value { color: var(--green); }
+  </style>
+</head>
+<body>
+
+<h1>Terraform Infrastructure Flow</h1>
+<div class="header-meta">
+  <span>Project: Boutique Microservices DevOps Stack</span>
+  <span>Region: us-east-1</span>
+  <span>Account: 501588780081</span>
+</div>
+
+<nav class="toc">
+  <h3>Table of Contents</h3>
+  <ol>
+    <li><a href="#phase0">Phase 0 &mdash; Initialization &amp; Provider Setup</a></li>
+    <li><a href="#phase1">Phase 1 &mdash; Variable Loading (terraform.tfvars)</a></li>
+    <li><a href="#phase2">Phase 2 &mdash; Root Module Execution (main.tf)</a></li>
+    <li><a href="#vpc">Module: VPC &mdash; Network Foundation</a></li>
+    <li><a href="#ecr">Module: ECR &mdash; Container Registry &amp; OIDC</a></li>
+    <li><a href="#eks">Module: EKS &mdash; Kubernetes Cluster</a></li>
+    <li><a href="#providers">Kubernetes &amp; Helm Provider Configuration</a></li>
+    <li><a href="#argocd">Module: ArgoCD &mdash; GitOps Controller</a></li>
+    <li><a href="#monitoring">Module: Monitoring &mdash; Prometheus &amp; Grafana</a></li>
+    <li><a href="#kyverno">Module: Kyverno &mdash; Policy Enforcement</a></li>
+    <li><a href="#outputs">Outputs</a></li>
+    <li><a href="#depgraph">Dependency Graph &amp; Execution Order</a></li>
+    <li><a href="#summary">Resource Summary</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="phase0"><span class="phase-badge">Phase 0</span> Initialization &amp; Provider Setup</h2>
+
+<p>Before any <code>plan</code> or <code>apply</code>, <code>terraform init</code> reads <code>provider.tf</code> and downloads required provider plugins.</p>
+
+<h4>provider.tf</h4>
+<pre><code><span class="keyword">terraform</span> {
+  <span class="keyword">required_version</span> = <span class="string">"&gt;= 1.5"</span>              <span class="comment"># Enforces minimum Terraform CLI version</span>
+
+  <span class="keyword">required_providers</span> {
+    <span class="keyword">aws</span> = {
+      source  = <span class="string">"hashicorp/aws"</span>
+      version = <span class="string">"~&gt; 5.0"</span>                   <span class="comment"># Any 5.x version</span>
+    }
+    <span class="keyword">kubernetes</span> = {
+      source  = <span class="string">"hashicorp/kubernetes"</span>
+      version = <span class="string">"~&gt; 2.25"</span>
+    }
+    <span class="keyword">helm</span> = {
+      source  = <span class="string">"hashicorp/helm"</span>
+      version = <span class="string">"~&gt; 2.12"</span>
+    }
+    <span class="keyword">tls</span> = {
+      source  = <span class="string">"hashicorp/tls"</span>
+      version = <span class="string">"~&gt; 4.0"</span>
+    }
+  }
+}
+
+<span class="keyword">provider</span> <span class="string">"aws"</span> {
+  region = var.region                       <span class="comment"># "us-east-1" from terraform.tfvars</span>
+}</code></pre>
+
+<div class="why-box">
+  <strong>Why:</strong> Downloads provider plugins into <code>.terraform/</code>. Version constraints (<code>~&gt; 5.0</code>) prevent breaking changes from new major versions. The AWS provider uses credentials from <code>~/.aws/credentials</code> or environment variables.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="phase1"><span class="phase-badge green">Phase 1</span> Variable Loading</h2>
+
+<p>Terraform automatically loads <code>terraform.tfvars</code> and maps values to the declarations in <code>variables.tf</code>.</p>
+
+<h4>terraform.tfvars</h4>
+<pre><code>region   = <span class="string">"us-east-1"</span>
+vpc_name = <span class="string">"EKS-Demo-VPC"</span>
+vpc_cidr = <span class="string">"10.1.0.0/16"</span>                    <span class="comment"># 65,536 IP addresses</span>
+
+availability_zones = [<span class="string">"us-east-1a"</span>, <span class="string">"us-east-1b"</span>, <span class="string">"us-east-1c"</span>]
+
+public_subnet_cidrs  = [<span class="string">"10.1.1.0/24"</span>, <span class="string">"10.1.2.0/24"</span>, <span class="string">"10.1.3.0/24"</span>]
+private_subnet_cidrs = [<span class="string">"10.1.4.0/24"</span>, <span class="string">"10.1.5.0/24"</span>, <span class="string">"10.1.6.0/24"</span>]
+
+cluster_name    = <span class="string">"eks-cluster"</span>
+node_group_name = <span class="string">"eks-node-group"</span>
+instance_types  = [<span class="string">"m7i-flex.large"</span>]        <span class="comment"># 2 vCPU, 8 GiB RAM</span>
+capacity_type   = <span class="string">"ON_DEMAND"</span>
+
+desired_size = <span class="value">1</span>
+min_size     = <span class="value">1</span>
+max_size     = <span class="value">2</span>
+disk_size    = <span class="value">30</span>
+
+repositories = [
+  <span class="string">"frontend"</span>, <span class="string">"gateway"</span>, <span class="string">"auth"</span>, <span class="string">"order-service"</span>,
+  <span class="string">"orders"</span>, <span class="string">"product-service"</span>, <span class="string">"user-service"</span>
+]
+
+github_org  = <span class="string">"gitcliff"</span>
+github_repo = <span class="string">"microservices-devops-stack"</span></code></pre>
+
+<div class="why-box">
+  <strong>Why each value matters:</strong>
+  <ul>
+    <li><code>/16</code> CIDR &mdash; gives 65K IPs, enough room for multiple subnets and future growth</li>
+    <li>3 AZs &mdash; EKS requires subnets in at least 2 AZs for high availability</li>
+    <li>Public vs private subnets &mdash; public for NAT/load balancers, private for worker nodes (no public IPs)</li>
+    <li><code>m7i-flex.large</code> &mdash; cost-effective for a dev workload (2 vCPU, 8 GiB)</li>
+    <li>Min 1 / Max 2 &mdash; keeps costs low while allowing some autoscaling</li>
+    <li>7 repositories &mdash; one ECR repo per microservice</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="phase2"><span class="phase-badge orange">Phase 2</span> Root Module Execution</h2>
+
+<p>Terraform builds a dependency graph from <code>main.tf</code> and executes modules in parallel where possible.</p>
+
+<pre><code><span class="keyword">data</span> <span class="string">"aws_caller_identity"</span> <span class="string">"current"</span> {}</code></pre>
+
+<div class="why-box">
+  <strong>Why:</strong> Queries AWS to get the account ID (<code>501588780081</code>). Used to construct the ECR registry URL for Kyverno: <code>501588780081.dkr.ecr.us-east-1.amazonaws.com</code>. Read-only &mdash; creates nothing.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="vpc"><span class="phase-badge green">Step 1</span> VPC Module &mdash; Network Foundation</h2>
+
+<p>Runs first. No dependencies on other modules.</p>
+
+<pre><code><span class="keyword">module</span> <span class="string">"vpc"</span> {
+  source               = <span class="string">"./modules/vpc"</span>
+  vpc_name             = var.vpc_name             <span class="comment"># "EKS-Demo-VPC"</span>
+  cidr_block           = var.vpc_cidr             <span class="comment"># "10.1.0.0/16"</span>
+  public_subnet_cidrs  = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
+  availability_zones   = var.availability_zones
+  cluster_name         = var.cluster_name         <span class="comment"># For subnet tagging</span>
+}</code></pre>
+
+<h3>1.1 &mdash; VPC</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_vpc"</span> <span class="string">"vpc"</span> {
+  cidr_block           = var.cidr_block           <span class="comment"># "10.1.0.0/16"</span>
+  enable_dns_support   = <span class="value">true</span>
+  enable_dns_hostnames = <span class="value">true</span>
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> The isolated network. <code>enable_dns_support</code> + <code>enable_dns_hostnames</code> are required for EKS &mdash; the API server and nodes need to resolve each other by hostname.</div>
+
+<h3>1.2 &mdash; Internet Gateway</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_internet_gateway"</span> <span class="string">"igw"</span> {
+  vpc_id = aws_vpc.vpc.id
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> Connects the VPC to the public internet. Without this, nothing in the VPC can reach the outside world. Public subnets route through this.</div>
+
+<h3>1.3 &mdash; Public Subnets (x3)</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_subnet"</span> <span class="string">"public"</span> {
+  count                   = length(var.public_subnet_cidrs)   <span class="comment"># 3</span>
+  vpc_id                  = aws_vpc.vpc.id
+  cidr_block              = var.public_subnet_cidrs[count.index]
+  availability_zone       = var.availability_zones[count.index]
+  map_public_ip_on_launch = <span class="value">false</span>
+
+  tags = {
+    <span class="string">"kubernetes.io/role/elb"</span>                    = <span class="string">"1"</span>
+    <span class="string">"kubernetes.io/cluster/${var.cluster_name}"</span> = <span class="string">"owned"</span>
+  }
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> 3 public subnets across 3 AZs. The <code>kubernetes.io/role/elb</code> tag is critical &mdash; the AWS Load Balancer Controller uses it to discover which subnets to place internet-facing ALBs in. Without this tag, Ingress resources won't get load balancers.</div>
+
+<h3>1.4 &mdash; Public Route Table</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_route_table"</span> <span class="string">"public"</span> {
+  vpc_id = aws_vpc.vpc.id
+  route {
+    cidr_block = <span class="string">"0.0.0.0/0"</span>                  <span class="comment"># All non-VPC traffic...</span>
+    gateway_id = aws_internet_gateway.igw.id   <span class="comment"># ...goes to the IGW</span>
+  }
+}
+
+<span class="keyword">resource</span> <span class="string">"aws_route_table_association"</span> <span class="string">"public"</span> {
+  count          = length(aws_subnet.public)
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> Makes the public subnets actually public. Without this route, traffic would stay inside the VPC even with an IGW attached.</div>
+
+<h3>1.5 &mdash; NAT Gateway (single AZ)</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_eip"</span> <span class="string">"nat"</span> {
+  domain = <span class="string">"vpc"</span>
+}
+
+<span class="keyword">resource</span> <span class="string">"aws_nat_gateway"</span> <span class="string">"nat"</span> {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id      <span class="comment"># Lives in first public subnet</span>
+  depends_on    = [aws_internet_gateway.igw]
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> Lets private subnets reach the internet (pull Docker images, download packages) without being directly reachable from outside. Single NAT Gateway saves cost &mdash; production would have one per AZ for HA.</div>
+
+<h3>1.6 &mdash; Private Subnets (x3)</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_subnet"</span> <span class="string">"private"</span> {
+  count             = length(var.private_subnet_cidrs)   <span class="comment"># 3</span>
+  vpc_id            = aws_vpc.vpc.id
+  cidr_block        = var.private_subnet_cidrs[count.index]
+  availability_zone = var.availability_zones[count.index]
+
+  tags = {
+    <span class="string">"kubernetes.io/role/internal-elb"</span>           = <span class="string">"1"</span>
+    <span class="string">"kubernetes.io/cluster/${var.cluster_name}"</span> = <span class="string">"owned"</span>
+  }
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> EKS worker nodes run here &mdash; no public IP, no direct internet access. The <code>internal-elb</code> tag tells the LB controller to use these for service-to-service internal load balancers.</div>
+
+<h3>1.7 &mdash; Private Route Table</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_route_table"</span> <span class="string">"private"</span> {
+  vpc_id = aws_vpc.vpc.id
+  route {
+    cidr_block     = <span class="string">"0.0.0.0/0"</span>
+    nat_gateway_id = aws_nat_gateway.nat.id    <span class="comment"># Outbound goes through NAT</span>
+  }
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> Routes outbound traffic from private subnets through NAT. Nodes can pull images but nothing from the internet can initiate a connection to them.</div>
+
+<div class="resource-count">VPC Module: 15 resources (1 VPC, 1 IGW, 6 subnets, 2 route tables, 6 RT associations, 1 EIP, 1 NAT GW)</div>
+
+<!-- ============================================================ -->
+<h2 id="ecr"><span class="phase-badge green">Step 2</span> ECR Module &mdash; Container Registry &amp; OIDC</h2>
+
+<p>Runs <strong>in parallel</strong> with VPC &mdash; no dependency between them. ECR is a standalone AWS service.</p>
+
+<pre><code><span class="keyword">module</span> <span class="string">"ecr"</span> {
+  source       = <span class="string">"./modules/ecr"</span>
+  repositories = var.repositories    <span class="comment"># 7 service names</span>
+  github_org   = var.github_org      <span class="comment"># "gitcliff"</span>
+  github_repo  = var.github_repo     <span class="comment"># "microservices-devops-stack"</span>
+}</code></pre>
+
+<h3>2.1 &mdash; ECR Repositories (x7)</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_ecr_repository"</span> <span class="string">"repos"</span> {
+  for_each = toset(var.repositories)        <span class="comment"># Creates one repo per service</span>
+
+  name         = each.value                 <span class="comment"># "auth", "frontend", etc.</span>
+  force_delete = <span class="value">true</span>                       <span class="comment"># Can destroy even with images inside</span>
+
+  image_scanning_configuration {
+    scan_on_push = <span class="value">true</span>                     <span class="comment"># AWS scans every pushed image for CVEs</span>
+  }
+
+  image_tag_mutability = <span class="string">"IMMUTABLE"</span>        <span class="comment"># Tags can NEVER be overwritten</span>
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> <code>IMMUTABLE</code> tags prevent pushing a different image under the same tag &mdash; critical for supply chain security. <code>scan_on_push</code> gives a second layer of CVE scanning alongside Trivy in CI.</div>
+
+<h3>2.2 &mdash; GitHub Actions OIDC Provider</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_iam_openid_connect_provider"</span> <span class="string">"github"</span> {
+  url             = <span class="string">"https://token.actions.githubusercontent.com"</span>
+  client_id_list  = [<span class="string">"sts.amazonaws.com"</span>]
+  thumbprint_list = [
+    <span class="string">"6938fd4d98bab03faadb97b34396831e3780aea1"</span>,
+    <span class="string">"1c58a3a8518e8759bf075b76b750d4f2df264fcd"</span>,
+  ]
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> Registers GitHub Actions as a trusted identity provider in AWS. When a workflow runs, GitHub issues an OIDC JWT. This tells AWS: "I trust tokens from GitHub." The thumbprints verify the TLS certificate chain. <code>client_id = sts.amazonaws.com</code> means the token's audience claim must match.</div>
+
+<h3>2.3 &mdash; Trust Policy (Who can assume the role)</h3>
+<pre><code><span class="keyword">data</span> <span class="string">"aws_iam_policy_document"</span> <span class="string">"github_actions_assume_role"</span> {
+  statement {
+    effect  = <span class="string">"Allow"</span>
+    actions = [<span class="string">"sts:AssumeRoleWithWebIdentity"</span>]
+
+    principals {
+      type        = <span class="string">"Federated"</span>
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {                                 <span class="comment"># Verify token audience</span>
+      test     = <span class="string">"StringEquals"</span>
+      variable = <span class="string">"token.actions.githubusercontent.com:aud"</span>
+      values   = [<span class="string">"sts.amazonaws.com"</span>]
+    }
+
+    condition {                                 <span class="comment"># Restrict to specific repo + branch</span>
+      test     = <span class="string">"StringLike"</span>
+      variable = <span class="string">"token.actions.githubusercontent.com:sub"</span>
+      values   = [<span class="string">"repo:gitcliff@46714226/microservices-devops-stack@1382059702:ref:refs/heads/main"</span>]
+    }
+  }
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> The critical security boundary. The <code>sub</code> claim identifies which repo and branch the workflow runs from. This restricts role assumption to <strong>only</strong> the <code>main</code> branch of <strong>only</strong> this specific repo. No other repo, no fork, no other branch can assume this role.</div>
+
+<h3>2.4 &mdash; IAM Role + Permissions Policy</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_iam_role"</span> <span class="string">"github_actions_ecr_push"</span> {
+  name               = <span class="string">"github-actions-ecr-push"</span>
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
+}
+
+<span class="keyword">data</span> <span class="string">"aws_iam_policy_document"</span> <span class="string">"ecr_push"</span> {
+  statement {
+    sid       = <span class="string">"ECRGetAuthToken"</span>
+    actions   = [<span class="string">"ecr:GetAuthorizationToken"</span>]
+    resources = [<span class="string">"*"</span>]                        <span class="comment"># Auth token is account-wide (AWS limitation)</span>
+  }
+  statement {
+    sid     = <span class="string">"ECRPushPull"</span>
+    actions = [
+      <span class="string">"ecr:BatchCheckLayerAvailability"</span>,  <span class="comment"># Check if layers exist (dedup)</span>
+      <span class="string">"ecr:BatchGetImage"</span>,               <span class="comment"># Pull manifests</span>
+      <span class="string">"ecr:CompleteLayerUpload"</span>,          <span class="comment"># Finish layer upload</span>
+      <span class="string">"ecr:GetDownloadUrlForLayer"</span>,       <span class="comment"># Presigned download URL</span>
+      <span class="string">"ecr:InitiateLayerUpload"</span>,          <span class="comment"># Start layer upload</span>
+      <span class="string">"ecr:PutImage"</span>,                     <span class="comment"># Push final manifest</span>
+      <span class="string">"ecr:UploadLayerPart"</span>,              <span class="comment"># Upload layer chunk</span>
+    ]
+    resources = [for repo in aws_ecr_repository.repos : repo.arn]
+                                                <span class="comment"># Scoped to only the 7 repos</span>
+  }
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> Defines WHAT the role can do. Push/pull actions are scoped to only the 7 ECR repo ARNs &mdash; the role can't touch any other repos in the account. Principle of least privilege.</div>
+
+<div class="resource-count">ECR Module: 10 resources (7 repos, 1 OIDC provider, 1 IAM role, 1 role policy)</div>
+
+<!-- ============================================================ -->
+<h2 id="eks"><span class="phase-badge orange">Step 3</span> EKS Module &mdash; Kubernetes Cluster</h2>
+
+<p>Waits for VPC to complete &mdash; needs <code>private_subnet_ids</code>.</p>
+
+<pre><code><span class="keyword">module</span> <span class="string">"eks"</span> {
+  source     = <span class="string">"./modules/eks"</span>
+  subnet_ids = module.vpc.private_subnet_ids   <span class="comment"># Workers go in private subnets</span>
+  depends_on = [module.vpc]
+  ...
+}</code></pre>
+
+<h3>3.1 &mdash; Cluster IAM Role</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_iam_role"</span> <span class="string">"eks_cluster_role"</span> {
+  name = <span class="string">"${var.cluster_name}-cluster-role"</span>
+  assume_role_policy = jsonencode({
+    Statement = [{
+      Effect    = <span class="string">"Allow"</span>
+      Principal = { Service = <span class="string">"eks.amazonaws.com"</span> }
+      Action    = <span class="string">"sts:AssumeRole"</span>
+    }]
+  })
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> The EKS control plane is an AWS-managed service. It needs an IAM role to manage resources on your behalf (ENIs, security groups). The trust policy allows only the EKS service to assume it.</div>
+
+<h3>3.2 &mdash; EKS Cluster</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_eks_cluster"</span> <span class="string">"eks"</span> {
+  name     = var.cluster_name                  <span class="comment"># "eks-cluster"</span>
+  role_arn = aws_iam_role.eks_cluster_role.arn
+  version  = <span class="string">"1.31"</span>                            <span class="comment"># Kubernetes version</span>
+
+  vpc_config {
+    subnet_ids              = var.subnet_ids
+    endpoint_public_access  = <span class="value">false</span>             <span class="comment"># API NOT reachable from internet</span>
+    endpoint_private_access = <span class="value">true</span>              <span class="comment"># API reachable from within VPC only</span>
+  }
+
+  encryption_config {
+    resources = [<span class="string">"secrets"</span>]                    <span class="comment"># Encrypt K8s Secrets at rest</span>
+    provider {
+      key_arn = aws_kms_key.eks_secrets.arn    <span class="comment"># Customer-managed KMS key</span>
+    }
+  }
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> <code>endpoint_public_access = false</code> is security hardening &mdash; the K8s API is only accessible from within the VPC. <code>encryption_config</code> encrypts Secrets in etcd. Without it, Secrets are stored as base64 (readable, not encrypted).</div>
+
+<h3>3.3 &mdash; KMS Key for Secrets Encryption</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_kms_key"</span> <span class="string">"eks_secrets"</span> {
+  description             = <span class="string">"KMS key for EKS secrets encryption"</span>
+  deletion_window_in_days = <span class="value">7</span>                <span class="comment"># Safety window before permanent deletion</span>
+  enable_key_rotation     = <span class="value">true</span>             <span class="comment"># Auto-rotates annually</span>
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> Customer-managed key with auto-rotation. The 7-day deletion window prevents accidental permanent loss of the key (and all encrypted Secrets).</div>
+
+<h3>3.4 &mdash; EKS OIDC Provider (for IRSA)</h3>
+<pre><code><span class="keyword">data</span> <span class="string">"tls_certificate"</span> <span class="string">"eks"</span> {
+  url = aws_eks_cluster.eks.identity[0].oidc[0].issuer
+}
+
+<span class="keyword">resource</span> <span class="string">"aws_iam_openid_connect_provider"</span> <span class="string">"eks"</span> {
+  client_id_list  = [<span class="string">"sts.amazonaws.com"</span>]
+  thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
+  url             = aws_eks_cluster.eks.identity[0].oidc[0].issuer
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> Enables <strong>IRSA (IAM Roles for Service Accounts)</strong>. Kubernetes pods can assume IAM roles without storing AWS credentials. Different from the GitHub OIDC provider in the ECR module &mdash; this one is for in-cluster workloads.</div>
+
+<h3>3.5 &mdash; Node Group IAM Role + Policies</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_iam_role"</span> <span class="string">"eks_node_role"</span> { ... }
+
+<span class="comment"># Three AWS-managed policies attached:</span>
+AmazonEKSWorkerNodePolicy     <span class="comment"># Nodes register with cluster</span>
+AmazonEKS_CNI_Policy          <span class="comment"># VPC CNI manages pod IPs via ENIs</span>
+AmazonEC2ContainerRegistryReadOnly  <span class="comment"># Nodes pull images from ECR</span></code></pre>
+<div class="why-box"><strong>Why:</strong> Worker nodes are EC2 instances that need permissions to: join the cluster, manage network interfaces for pod networking, and pull container images. Without any of these, nodes fail to start.</div>
+
+<h3>3.6 &mdash; Managed Node Group</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_eks_node_group"</span> <span class="string">"node_group"</span> {
+  cluster_name    = aws_eks_cluster.eks.name
+  node_role_arn   = aws_iam_role.eks_node_role.arn
+  subnet_ids      = var.subnet_ids             <span class="comment"># Private subnets</span>
+  instance_types  = [<span class="string">"m7i-flex.large"</span>]
+  capacity_type   = <span class="string">"ON_DEMAND"</span>
+  disk_size       = <span class="value">30</span>
+
+  scaling_config {
+    desired_size = <span class="value">1</span>
+    min_size     = <span class="value">1</span>
+    max_size     = <span class="value">2</span>
+  }
+
+  update_config {
+    max_unavailable = <span class="value">1</span>                      <span class="comment"># Rolling updates: 1 node at a time</span>
+  }
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> AWS manages provisioning, patching, and draining of EC2 instances. <code>depends_on</code> (IAM policies) ensures permissions exist before nodes try to join &mdash; otherwise they fail with access denied.</div>
+
+<h3>3.7 &mdash; EBS CSI Driver (IRSA)</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"aws_iam_role"</span> <span class="string">"ebs_csi_irsa"</span> {
+  assume_role_policy = ...  <span class="comment"># Only ebs-csi-controller-sa in kube-system</span>
+}
+
+<span class="keyword">resource</span> <span class="string">"aws_eks_addon"</span> <span class="string">"ebs_csi"</span> {
+  cluster_name             = aws_eks_cluster.eks.name
+  addon_name               = <span class="string">"aws-ebs-csi-driver"</span>
+  service_account_role_arn = aws_iam_role.ebs_csi_irsa.arn
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> Your PostgreSQL StatefulSet uses PersistentVolumeClaims &mdash; the EBS CSI driver dynamically provisions EBS volumes. IRSA restricts this powerful permission to only the CSI controller pod, not every pod on the node. Principle of least privilege.</div>
+
+<div class="resource-count">EKS Module: ~14 resources (1 cluster, 1 KMS key, 1 KMS alias, 1 OIDC provider, 2 IAM roles, 4 policy attachments, 1 node group, 1 EBS CSI role, 1 EBS addon, 1 TLS cert data)</div>
+
+<!-- ============================================================ -->
+<h2 id="providers"><span class="phase-badge purple">Step 4</span> Kubernetes &amp; Helm Provider Configuration</h2>
+
+<p>After EKS is up, configure providers to talk to the cluster.</p>
+
+<pre><code><span class="keyword">data</span> <span class="string">"aws_eks_cluster_auth"</span> <span class="string">"eks"</span> {
+  name = module.eks.cluster_name               <span class="comment"># Gets a short-lived auth token</span>
+}
+
+<span class="keyword">provider</span> <span class="string">"kubernetes"</span> {
+  alias                  = <span class="string">"eks"</span>
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  token                  = data.aws_eks_cluster_auth.eks.token
+}
+
+<span class="keyword">provider</span> <span class="string">"helm"</span> {
+  alias = <span class="string">"eks"</span>
+  kubernetes {
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(...)
+    token                  = data.aws_eks_cluster_auth.eks.token
+  }
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> Tells Terraform how to authenticate to the K8s API. The CA certificate verifies you're talking to the real API server, not a MITM. The <code>alias = "eks"</code> allows multiple provider configs. These are passed to ArgoCD, Monitoring, and Kyverno modules.</div>
+
+<!-- ============================================================ -->
+<h2 id="argocd"><span class="phase-badge purple">Step 5</span> ArgoCD Module &mdash; GitOps Controller</h2>
+
+<p>Runs after EKS. Deploys in parallel with Monitoring and Kyverno.</p>
+
+<pre><code><span class="keyword">resource</span> <span class="string">"kubernetes_namespace_v1"</span> <span class="string">"argocd"</span> {
+  metadata { name = <span class="string">"argocd"</span> }
+}
+
+<span class="keyword">resource</span> <span class="string">"helm_release"</span> <span class="string">"argocd"</span> {
+  name       = <span class="string">"argocd"</span>
+  repository = <span class="string">"https://argoproj.github.io/argo-helm"</span>
+  chart      = <span class="string">"argo-cd"</span>
+  version    = <span class="string">"7.7.5"</span>
+  timeout    = <span class="value">600</span>
+
+  values = [yamlencode({
+    server = {
+      service = { type = <span class="string">"ClusterIP"</span> }         <span class="comment"># Internal only</span>
+    }
+    configs = {
+      params = { <span class="string">"server.insecure"</span> = <span class="value">true</span> }   <span class="comment"># TLS at ingress, not here</span>
+    }
+  })]
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> ArgoCD watches your Git repo for changes to <code>k8s/overlays/dev/kustomization.yaml</code> and automatically syncs cluster state. <code>ClusterIP</code> = only reachable within the cluster. <code>server.insecure</code> = TLS terminated at the Ingress/ALB in front.</div>
+
+<div class="resource-count">ArgoCD Module: 2 resources (1 namespace, 1 Helm release)</div>
+
+<!-- ============================================================ -->
+<h2 id="monitoring"><span class="phase-badge purple">Step 6</span> Monitoring Module &mdash; Prometheus &amp; Grafana</h2>
+
+<p>Runs in parallel with ArgoCD. Both depend only on EKS.</p>
+
+<pre><code><span class="keyword">resource</span> <span class="string">"helm_release"</span> <span class="string">"kube_prometheus_stack"</span> {
+  chart   = <span class="string">"kube-prometheus-stack"</span>
+  version = <span class="string">"65.1.0"</span>
+
+  values = [yamlencode({
+    prometheus = {
+      prometheusSpec = {
+        serviceMonitorSelectorNilUsesHelmValues = <span class="value">false</span>
+        podMonitorSelectorNilUsesHelmValues     = <span class="value">false</span>
+      }
+    }
+    grafana = {
+      sidecar = {
+        dashboards = { enabled = <span class="value">true</span>, label = <span class="string">"grafana_dashboard"</span> }
+      }
+    }
+  })]
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> The two critical settings:
+<ul>
+  <li><code>serviceMonitorSelectorNilUsesHelmValues = false</code> &mdash; Without this, Prometheus only discovers its own ServiceMonitors. Setting <code>false</code> means it discovers ServiceMonitors from <strong>all namespaces</strong>, including the 6 in your <code>boutique</code> namespace.</li>
+  <li><code>grafana.sidecar.dashboards</code> &mdash; Auto-imports dashboards from ConfigMaps labeled <code>grafana_dashboard</code>.</li>
+</ul>
+</div>
+
+<div class="resource-count">Monitoring Module: 2 resources (1 namespace, 1 Helm release &mdash; which deploys Prometheus, Grafana, Alertmanager, and Prometheus Operator)</div>
+
+<!-- ============================================================ -->
+<h2 id="kyverno"><span class="phase-badge purple">Step 7</span> Kyverno Module &mdash; Policy Enforcement</h2>
+
+<p>Runs in parallel with ArgoCD and Monitoring.</p>
+
+<pre><code><span class="keyword">module</span> <span class="string">"kyverno"</span> {
+  source       = <span class="string">"./modules/kyverno"</span>
+  ecr_registry = <span class="string">"501588780081.dkr.ecr.us-east-1.amazonaws.com"</span>
+  depends_on   = [module.eks]
+}</code></pre>
+
+<h3>7.1 &mdash; Kyverno Helm Release</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"helm_release"</span> <span class="string">"kyverno"</span> {
+  chart      = <span class="string">"kyverno"</span>
+  version    = <span class="string">"3.3.4"</span>
+  repository = <span class="string">"https://kyverno.github.io/kyverno"</span>
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> Installs Kyverno's admission controller webhooks, CRDs, and controllers. Once running, Kyverno intercepts every Kubernetes API request and evaluates it against policies.</div>
+
+<h3>7.2 &mdash; SLSA Provenance ClusterPolicy</h3>
+<pre><code><span class="keyword">resource</span> <span class="string">"kubernetes_manifest"</span> <span class="string">"require_slsa_provenance"</span> {
+  depends_on = [helm_release.kyverno]          <span class="comment"># CRDs must exist first</span>
+
+  manifest = {
+    kind = <span class="string">"ClusterPolicy"</span>
+    metadata = { name = <span class="string">"require-slsa-provenance"</span> }
+    spec = {
+      validationFailureAction = <span class="string">"Audit"</span>       <span class="comment"># Log only, don't block (initially)</span>
+      rules = [{
+        name  = <span class="string">"verify-slsa-provenance"</span>
+        match = { resources = { kinds = [<span class="string">"Pod"</span>], namespaces = [<span class="string">"boutique"</span>] } }
+
+        verifyImages = [{
+          imageReferences = [<span class="string">"501588780081.dkr.ecr.us-east-1.amazonaws.com/*"</span>]
+          attestations = [{
+            type = <span class="string">"https://slsa.dev/provenance/v1"</span>
+            attestors = [{
+              entries = [{
+                keyless = {
+                  issuer  = <span class="string">"https://token.actions.githubusercontent.com"</span>
+                  subject = <span class="string">"https://github.com/gitcliff/microservices-devops-stack/*"</span>
+                  rekor   = { url = <span class="string">"https://rekor.sigstore.dev"</span> }
+                }
+              }]
+            }]
+          }]
+        }]
+      }]
+    }
+  }
+}</code></pre>
+<div class="why-box"><strong>Why:</strong> When a Pod is created in <code>boutique</code> namespace with an ECR image, Kyverno:
+<ol>
+  <li>Fetches OCI referrer artifacts from ECR</li>
+  <li>Finds the SLSA provenance attestation</li>
+  <li>Verifies it was signed by GitHub Actions OIDC (Sigstore keyless)</li>
+  <li>Checks the signature against the Rekor transparency log</li>
+  <li><strong>Audit mode:</strong> logs result. <strong>Enforce mode:</strong> rejects Pod if verification fails</li>
+</ol>
+</div>
+
+<div class="resource-count">Kyverno Module: 3 resources (1 namespace, 1 Helm release, 1 ClusterPolicy manifest)</div>
+
+<!-- ============================================================ -->
+<h2 id="outputs"><span class="phase-badge">Outputs</span></h2>
+
+<pre><code>cluster_name           = <span class="string">"eks-cluster"</span>
+cluster_endpoint       = <span class="string">"https://XXXXXX.gr7.us-east-1.eks.amazonaws.com"</span>
+vpc_id                 = <span class="string">"vpc-0abc123..."</span>
+ecr_urls               = {
+  auth            = <span class="string">"501588780081.dkr.ecr.us-east-1.amazonaws.com/auth"</span>
+  frontend        = <span class="string">"501588780081.dkr.ecr.us-east-1.amazonaws.com/frontend"</span>
+  ...
+}
+github_actions_role_arn = <span class="string">"arn:aws:iam::501588780081:role/github-actions-ecr-push"</span>
+argocd_namespace       = <span class="string">"argocd"</span>
+monitoring_namespace   = <span class="string">"monitoring"</span>
+kyverno_namespace      = <span class="string">"kyverno"</span></code></pre>
+<div class="why-box"><strong>Why:</strong> Printed after <code>terraform apply</code>. The <code>github_actions_role_arn</code> is what you set as the <code>AWS_ROLE_ARN</code> secret in GitHub. The <code>cluster_endpoint</code> is used to configure <code>kubectl</code>.</div>
+
+<!-- ============================================================ -->
+<h2 id="depgraph">Dependency Graph &amp; Execution Order</h2>
+
+<div class="dep-graph">terraform.tfvars
+        |
+        v
+   +-----------+
+   | provider.tf | -- AWS provider configured
+   +-----------+
+        |
+   +----+----+
+   v         v
++-----+   +-----+
+| VPC |   | ECR |   &lt;-- run in PARALLEL (no dependency)
++--+--+   +-----+
+   |
+   v
++-----+
+| EKS |   &lt;-- waits for VPC (needs subnet_ids)
++--+--+
+   |
+   +-- kubernetes/helm providers configured
+   |
+   +------+------+
+   v      v      v
++------+ +----------+ +--------+
+|ArgoCD| |Monitoring| |Kyverno |   &lt;-- all 3 in PARALLEL (depend only on EKS)
++------+ +----------+ +--------+</div>
+
+<!-- ============================================================ -->
+<h2 id="summary">Resource Summary</h2>
+
+<table>
+  <thead>
+    <tr><th>Module</th><th>Resources</th><th>Key Components</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>VPC</td><td>~15</td><td>VPC, IGW, 6 subnets, 2 route tables, NAT GW, EIP</td></tr>
+    <tr><td>ECR</td><td>10</td><td>7 repos, OIDC provider, IAM role + policy</td></tr>
+    <tr><td>EKS</td><td>~14</td><td>Cluster, KMS, node group, OIDC, EBS CSI, IAM roles</td></tr>
+    <tr><td>ArgoCD</td><td>2</td><td>Namespace, Helm release (argo-cd 7.7.5)</td></tr>
+    <tr><td>Monitoring</td><td>2</td><td>Namespace, Helm release (kube-prometheus-stack 65.1.0)</td></tr>
+    <tr><td>Kyverno</td><td>3</td><td>Namespace, Helm release, ClusterPolicy</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>~46</strong></td><td></td></tr>
+  </tbody>
+</table>
+
+<hr>
+<p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; margin-top: 2rem;">
+  Boutique Microservices DevOps Stack &mdash; Infrastructure Documentation
+</p>
+
+</body>
+</html>
